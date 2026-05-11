@@ -6,6 +6,7 @@ Run: python -m backend.main
 """
 
 import asyncio
+import csv
 import io
 import logging
 import os
@@ -308,18 +309,19 @@ async def export_attendance(date: str = None, format: str = "csv"):
     present_ids = {r["staff_id"] for r in records}
 
     if format == "csv":
-        lines = ["Staff ID,Name,Designation,Department,Status,Time In,Confidence"]
+        output = io.StringIO()
+        writer = csv.writer(output)
+        writer.writerow(["Staff ID", "Name", "Designation", "Department",
+                         "Status", "Time In", "Confidence"])
         for staff in all_staff:
             sid = staff["staff_id"]
             record = next((r for r in records if r["staff_id"] == sid), None)
             status = "Present" if sid in present_ids else "Absent"
             time_in = record["logged_at"] if record else ""
             conf = f"{record['confidence']:.3f}" if record else ""
-            lines.append(
-                f"{sid},{staff['name']},{staff['designation']},"
-                f"{staff['department']},{status},{time_in},{conf}"
-            )
-        csv_content = "\n".join(lines)
+            writer.writerow([sid, staff["name"], staff["designation"],
+                             staff["department"], status, time_in, conf])
+        csv_content = output.getvalue()
         return JSONResponse(
             content={"csv": csv_content, "filename": f"attendance_{date or 'today'}.csv"}
         )

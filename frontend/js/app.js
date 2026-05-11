@@ -154,7 +154,10 @@ async function loadStaff() {
         }
         empty.style.display = 'none';
 
-        tbody.innerHTML = data.staff.map(s => `
+        tbody.innerHTML = data.staff.map(s => {
+            const eid = s.staff_id.replace(/'/g, "\\'");
+            const ename = s.name.replace(/'/g, "\\'");
+            return `
             <tr>
                 <td><strong>${s.staff_id}</strong></td>
                 <td>${s.name}</td>
@@ -164,11 +167,11 @@ async function loadStaff() {
                 <td>${s.face_count || 0}</td>
                 <td><span class="badge ${s.active ? 'badge-present' : 'badge-absent'}">${s.active ? 'Active' : 'Inactive'}</span></td>
                 <td>
-                    <button class="btn btn-outline btn-sm" onclick="showAddFaceModal('${s.staff_id}', '${s.name}')">+ Face</button>
-                    <button class="btn btn-danger btn-sm" onclick="confirmDeleteStaff('${s.staff_id}')">Delete</button>
+                    <button class="btn btn-outline btn-sm" onclick="showAddFaceModal('${eid}', '${ename}')">+ Face</button>
+                    <button class="btn btn-danger btn-sm" onclick="confirmDeleteStaff('${eid}')">Delete</button>
                 </td>
-            </tr>
-        `).join('');
+            </tr>`;
+        }).join('');
     } catch {}
 }
 

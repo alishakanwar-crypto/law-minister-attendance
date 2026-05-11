@@ -150,13 +150,17 @@ class AttendanceEngine:
                 await asyncio.sleep(30)
                 continue
 
+            loop = asyncio.get_running_loop()
             for camera_cfg in cameras:
                 if not self.running:
                     break
                 try:
-                    image_bytes = cam.capture_from_camera(camera_cfg)
+                    image_bytes = await loop.run_in_executor(
+                        None, cam.capture_from_camera, camera_cfg)
                     if image_bytes:
-                        self._process_frame(image_bytes, camera_cfg["name"])
+                        await loop.run_in_executor(
+                            None, self._process_frame, image_bytes,
+                            camera_cfg["name"])
                 except Exception as e:
                     logger.error(f"Error processing camera {camera_cfg['name']}: {e}")
 
