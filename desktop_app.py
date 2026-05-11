@@ -1008,7 +1008,7 @@ class AttendanceApp(ctk.CTk if CTK else tk.Tk):
             var.set(str(cfg.get(key, "")))
         self.wa_enabled_var.set(cfg.get("whatsapp_enabled", False))
         self.wa_recipient_var.set(cfg.get("whatsapp_recipient", ""))
-        self.wa_phone_id_var.set(cfg.get("whatsapp_phone_id", "902332186299839"))
+        self.wa_phone_id_var.set(cfg.get("whatsapp_phone_id", "1168433719678061"))
 
     def _save_settings(self):
         cfg = load_config()

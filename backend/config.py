@@ -22,7 +22,7 @@ DEFAULT_CONFIG = {
     "snapshot_interval_seconds": 5,
     "local_port": 8900,
     "whatsapp_enabled": False,
-    "whatsapp_phone_id": "902332186299839",
+    "whatsapp_phone_id": "1168433719678061",
     "whatsapp_recipient": "",
 }
 
