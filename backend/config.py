@@ -21,6 +21,9 @@ DEFAULT_CONFIG = {
     "cooldown_seconds": 300,
     "snapshot_interval_seconds": 5,
     "local_port": 8900,
+    "whatsapp_enabled": False,
+    "whatsapp_phone_id": "902332186299839",
+    "whatsapp_recipient": "",
 }
 
 

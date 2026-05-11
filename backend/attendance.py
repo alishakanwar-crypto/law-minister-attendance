@@ -17,6 +17,7 @@ import numpy as np
 from backend import database as db
 from backend import face_engine
 from backend import camera as cam
+from backend import whatsapp as wa
 from backend.config import load_config
 
 logger = logging.getLogger("attendance.engine")
@@ -128,6 +129,10 @@ class AttendanceEngine:
             logger.info(
                 f"Attendance: {name} ({staff_id}) — "
                 f"confidence={confidence:.3f} camera={camera_name}"
+            )
+            wa.notify_checkin(
+                cfg, staff_name=name, staff_id=staff_id,
+                confidence=confidence, camera=camera_name,
             )
 
         return records

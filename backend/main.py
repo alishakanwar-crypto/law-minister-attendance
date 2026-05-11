@@ -21,6 +21,7 @@ from fastapi.staticfiles import StaticFiles
 from backend import database as db
 from backend.attendance import engine as attendance_engine
 from backend import face_engine
+from backend import whatsapp as wa
 from backend.config import load_config, save_config
 
 logging.basicConfig(
@@ -297,6 +298,27 @@ async def update_settings(request: Request):
     cfg.update(data)
     save_config(cfg)
     return {"success": True}
+
+
+@app.post("/api/whatsapp/test")
+async def test_whatsapp(request: Request):
+    """Send a test WhatsApp message to verify configuration."""
+    data = await request.json()
+    recipient = data.get("recipient", "")
+    if not recipient:
+        raise HTTPException(400, "Recipient number required")
+    cfg = load_config()
+    cfg["whatsapp_enabled"] = True
+    cfg["whatsapp_recipient"] = recipient
+    office = cfg.get("office_name", "Law Minister's Office")
+    body = (
+        f"*{office} \u2014 Test Message*\n\n"
+        f"WhatsApp notifications are configured and working.\n"
+        f"Check-in alerts will be sent to this number.\n\n"
+        f"_LEGIT COMMUNISYS \u2014 Automated Notification_"
+    )
+    ok = wa.send_text_message(cfg, recipient, body)
+    return {"success": ok}
 
 
 # ---- Export ----

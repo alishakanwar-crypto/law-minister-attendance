@@ -29,6 +29,7 @@ except ImportError:
 from backend import database as db
 from backend import face_engine
 from backend import camera as cam
+from backend import whatsapp as wa
 from backend.config import load_config, save_config
 
 logging.basicConfig(
@@ -448,6 +449,7 @@ class AttendanceApp(ctk.CTk if CTK else tk.Tk):
                 return
 
             results = []
+            matched = []
             for embedding, cropped_face, bbox in detections:
                 match = face_engine.match_face(embedding, threshold=threshold)
                 if match:
@@ -463,12 +465,18 @@ class AttendanceApp(ctk.CTk if CTK else tk.Tk):
                         camera_source="manual",
                     )
                     results.append(f"{name} ({confidence:.1%})")
+                    matched.append((staff_id, name, confidence))
 
             if results:
                 msg = "Matched: " + ", ".join(results)
                 self.after(0, lambda: self.checkin_result.configure(
                     text=msg, text_color=SUCCESS))
                 self.after(0, self._refresh_dashboard)
+                for staff_id, name, confidence in matched:
+                    wa.notify_checkin(
+                        cfg, staff_name=name, staff_id=staff_id,
+                        confidence=confidence, camera="manual",
+                    )
             else:
                 self.after(0, lambda: self.checkin_result.configure(
                     text="No registered face matched", text_color=WARNING))
@@ -948,15 +956,59 @@ class AttendanceApp(ctk.CTk if CTK else tk.Tk):
             entry.pack(side="left")
             self.setting_vars[key] = (var, dtype)
 
+        # ─── WhatsApp Notification Settings ───
+        wa_label = ctk.CTkLabel(tab, text="WhatsApp Notifications", font=ctk.CTkFont(size=18, weight="bold"), text_color=GOLD) if CTK else tk.Label(tab, text="WhatsApp Notifications", font=("Segoe UI", 16, "bold"), fg=GOLD, bg=DARK_BG)
+        wa_label.pack(anchor="w", pady=(20, 10))
+
+        wa_card = ctk.CTkFrame(tab, fg_color=CARD_BG, corner_radius=12) if CTK else tk.Frame(tab, bg=CARD_BG)
+        wa_card.pack(fill="x")
+
+        # Enable/Disable toggle
+        wa_toggle_row = ctk.CTkFrame(wa_card, fg_color="transparent") if CTK else tk.Frame(wa_card, bg=CARD_BG)
+        wa_toggle_row.pack(fill="x", padx=20, pady=8)
+        ctk.CTkLabel(wa_toggle_row, text="Enable WhatsApp Alerts", text_color=TEXT, font=ctk.CTkFont(size=13), width=260, anchor="w").pack(side="left") if CTK else tk.Label(wa_toggle_row, text="Enable WhatsApp Alerts", fg=TEXT, bg=CARD_BG, font=("Segoe UI", 11), width=30, anchor="w").pack(side="left")
+        self.wa_enabled_var = tk.BooleanVar(value=False)
+        if CTK:
+            self.wa_toggle = ctk.CTkSwitch(wa_toggle_row, text="", variable=self.wa_enabled_var, onvalue=True, offvalue=False, progress_color=SUCCESS)
+            self.wa_toggle.pack(side="left")
+        else:
+            tk.Checkbutton(wa_toggle_row, variable=self.wa_enabled_var, bg=CARD_BG, fg=TEXT, selectcolor=DARK_BG).pack(side="left")
+
+        # Recipient number
+        wa_recip_row = ctk.CTkFrame(wa_card, fg_color="transparent") if CTK else tk.Frame(wa_card, bg=CARD_BG)
+        wa_recip_row.pack(fill="x", padx=20, pady=6)
+        ctk.CTkLabel(wa_recip_row, text="Recipient Phone Number", text_color=TEXT, font=ctk.CTkFont(size=13), width=260, anchor="w").pack(side="left") if CTK else tk.Label(wa_recip_row, text="Recipient Phone Number", fg=TEXT, bg=CARD_BG, font=("Segoe UI", 11), width=30, anchor="w").pack(side="left")
+        self.wa_recipient_var = tk.StringVar()
+        wa_entry = ctk.CTkEntry(wa_recip_row, textvariable=self.wa_recipient_var, width=200, fg_color=DARK_BG, text_color=TEXT, border_color=ACCENT, placeholder_text="+91XXXXXXXXXX") if CTK else tk.Entry(wa_recip_row, textvariable=self.wa_recipient_var, bg=DARK_BG, fg=TEXT, width=25)
+        wa_entry.pack(side="left")
+
+        # Phone ID (pre-filled, rarely changed)
+        wa_pid_row = ctk.CTkFrame(wa_card, fg_color="transparent") if CTK else tk.Frame(wa_card, bg=CARD_BG)
+        wa_pid_row.pack(fill="x", padx=20, pady=6)
+        ctk.CTkLabel(wa_pid_row, text="WhatsApp Phone ID", text_color=TEXT_DIM, font=ctk.CTkFont(size=13), width=260, anchor="w").pack(side="left") if CTK else tk.Label(wa_pid_row, text="WhatsApp Phone ID", fg=TEXT_DIM, bg=CARD_BG, font=("Segoe UI", 11), width=30, anchor="w").pack(side="left")
+        self.wa_phone_id_var = tk.StringVar()
+        wa_pid_entry = ctk.CTkEntry(wa_pid_row, textvariable=self.wa_phone_id_var, width=200, fg_color=DARK_BG, text_color=TEXT_DIM, border_color=ACCENT) if CTK else tk.Entry(wa_pid_row, textvariable=self.wa_phone_id_var, bg=DARK_BG, fg=TEXT_DIM, width=25)
+        wa_pid_entry.pack(side="left")
+
+        # Test button
+        wa_test_row = ctk.CTkFrame(wa_card, fg_color="transparent") if CTK else tk.Frame(wa_card, bg=CARD_BG)
+        wa_test_row.pack(fill="x", padx=20, pady=10)
+        ctk.CTkButton(wa_test_row, text="Send Test Message", width=180, fg_color=BLUE, hover_color="#2980b9", command=self._test_whatsapp).pack(side="left") if CTK else tk.Button(wa_test_row, text="Send Test Message", bg=BLUE, fg="white", command=self._test_whatsapp).pack(side="left")
+        self.wa_status_label = ctk.CTkLabel(wa_test_row, text="", font=ctk.CTkFont(size=12), text_color=TEXT_DIM) if CTK else tk.Label(wa_test_row, text="", fg=TEXT_DIM, bg=CARD_BG, font=("Segoe UI", 10))
+        self.wa_status_label.pack(side="left", padx=15)
+
         btn_frame = ctk.CTkFrame(tab, fg_color="transparent") if CTK else tk.Frame(tab, bg=DARK_BG)
         btn_frame.pack(fill="x", pady=20)
-        ctk.CTkButton(btn_frame, text="💾 Save Settings", width=150, fg_color=SUCCESS, hover_color="#219a52", command=self._save_settings).pack(side="left", padx=5) if CTK else tk.Button(btn_frame, text="Save Settings", bg=SUCCESS, fg="white", command=self._save_settings).pack(side="left", padx=5)
-        ctk.CTkButton(btn_frame, text="↩ Reset to Defaults", width=150, fg_color=ACCENT, command=self._reset_settings).pack(side="left", padx=5) if CTK else None
+        ctk.CTkButton(btn_frame, text="Save Settings", width=150, fg_color=SUCCESS, hover_color="#219a52", command=self._save_settings).pack(side="left", padx=5) if CTK else tk.Button(btn_frame, text="Save Settings", bg=SUCCESS, fg="white", command=self._save_settings).pack(side="left", padx=5)
+        ctk.CTkButton(btn_frame, text="Reset to Defaults", width=150, fg_color=ACCENT, command=self._reset_settings).pack(side="left", padx=5) if CTK else None
 
     def _load_settings(self):
         cfg = load_config()
         for key, (var, dtype) in self.setting_vars.items():
             var.set(str(cfg.get(key, "")))
+        self.wa_enabled_var.set(cfg.get("whatsapp_enabled", False))
+        self.wa_recipient_var.set(cfg.get("whatsapp_recipient", ""))
+        self.wa_phone_id_var.set(cfg.get("whatsapp_phone_id", "902332186299839"))
 
     def _save_settings(self):
         cfg = load_config()
@@ -974,8 +1026,38 @@ class AttendanceApp(ctk.CTk if CTK else tk.Tk):
                     pass
             else:
                 cfg[key] = val
+        cfg["whatsapp_enabled"] = self.wa_enabled_var.get()
+        cfg["whatsapp_recipient"] = self.wa_recipient_var.get().strip()
+        cfg["whatsapp_phone_id"] = self.wa_phone_id_var.get().strip()
         save_config(cfg)
         messagebox.showinfo("Saved", "Settings saved successfully")
+
+    def _test_whatsapp(self):
+        """Send a test WhatsApp message to verify configuration."""
+        recipient = self.wa_recipient_var.get().strip()
+        phone_id = self.wa_phone_id_var.get().strip()
+        if not recipient:
+            self.wa_status_label.configure(text="Enter recipient number first", text_color=DANGER)
+            return
+        cfg = load_config()
+        cfg["whatsapp_enabled"] = True
+        cfg["whatsapp_recipient"] = recipient
+        cfg["whatsapp_phone_id"] = phone_id
+        self.wa_status_label.configure(text="Sending...", text_color=WARNING)
+        self.update()
+
+        office = cfg.get("office_name", "Law Minister's Office")
+        body = (
+            f"*{office} — Test Message*\n\n"
+            f"WhatsApp notifications are configured and working.\n"
+            f"Check-in alerts will be sent to this number.\n\n"
+            f"_LEGIT COMMUNISYS — Automated Notification_"
+        )
+        ok = wa.send_text_message(cfg, recipient, body)
+        if ok:
+            self.wa_status_label.configure(text="Test message sent!", text_color=SUCCESS)
+        else:
+            self.wa_status_label.configure(text="Failed — check token & number", text_color=DANGER)
 
     def _reset_settings(self):
         from backend.config import DEFAULT_CONFIG
@@ -1013,8 +1095,16 @@ class AttendanceApp(ctk.CTk if CTK else tk.Tk):
 
     def on_new_attendance(self, records):
         """Called from engine thread when new attendance is detected."""
+        cfg = load_config()
         for r in records:
             logger.info(f"New attendance: {r['name']} ({r['staff_id']})")
+            wa.notify_checkin(
+                cfg,
+                staff_name=r["name"],
+                staff_id=r["staff_id"],
+                confidence=r.get("confidence", 0.0),
+                camera=r.get("camera", "unknown"),
+            )
         self._refresh_dashboard()
 
 
