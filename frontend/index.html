@@ -1,0 +1,442 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Staff Attendance System — Law Minister's Office</title>
+    <link rel="stylesheet" href="/static/css/styles.css">
+</head>
+<body>
+
+<!-- Header -->
+<div class="header">
+    <div>
+        <h1>Staff Attendance System</h1>
+        <div class="subtitle">Law Minister's Office — AI-Powered Face Recognition</div>
+    </div>
+    <div class="header-right">
+        <div class="engine-status" id="engineStatus">
+            <span class="dot" id="engineDot"></span>
+            <span id="engineLabel">Engine Stopped</span>
+        </div>
+        <button class="btn btn-success btn-sm" id="btnStartEngine" onclick="toggleEngine()">Start</button>
+    </div>
+</div>
+
+<!-- Navigation -->
+<div class="nav">
+    <div class="nav-item active" data-tab="dashboard" onclick="switchTab('dashboard')">Dashboard</div>
+    <div class="nav-item" data-tab="staff" onclick="switchTab('staff')">Staff Management</div>
+    <div class="nav-item" data-tab="cameras" onclick="switchTab('cameras')">Cameras</div>
+    <div class="nav-item" data-tab="attendance" onclick="switchTab('attendance')">Attendance Log</div>
+    <div class="nav-item" data-tab="reports" onclick="switchTab('reports')">Reports</div>
+    <div class="nav-item" data-tab="settings" onclick="switchTab('settings')">Settings</div>
+</div>
+
+<!-- Main Content -->
+<div class="main">
+
+    <!-- Dashboard Tab -->
+    <div id="tab-dashboard" class="tab-content">
+        <div class="stats-grid">
+            <div class="stat-card">
+                <div class="label">Total Staff</div>
+                <div class="value" id="statTotal">0</div>
+            </div>
+            <div class="stat-card">
+                <div class="label">Present Today</div>
+                <div class="value green" id="statPresent">0</div>
+            </div>
+            <div class="stat-card">
+                <div class="label">Absent Today</div>
+                <div class="value red" id="statAbsent">0</div>
+            </div>
+            <div class="stat-card">
+                <div class="label">Attendance %</div>
+                <div class="value amber" id="statPct">0%</div>
+            </div>
+        </div>
+
+        <div class="card">
+            <div class="card-header">
+                <h3>Today's Attendance</h3>
+                <button class="btn btn-outline btn-sm" onclick="refreshDashboard()">Refresh</button>
+            </div>
+            <div class="card-body">
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Staff ID</th>
+                            <th>Name</th>
+                            <th>Status</th>
+                            <th>Time In</th>
+                            <th>Confidence</th>
+                            <th>Camera</th>
+                        </tr>
+                    </thead>
+                    <tbody id="dashboardTable"></tbody>
+                </table>
+                <div class="empty-state" id="dashboardEmpty" style="display:none;">
+                    <div class="icon">📋</div>
+                    <h3>No attendance records yet</h3>
+                    <p>Start the engine or use manual check-in to begin tracking.</p>
+                </div>
+            </div>
+        </div>
+
+        <!-- Manual Check-in -->
+        <div class="card">
+            <div class="card-header">
+                <h3>Manual Check-in (Test)</h3>
+            </div>
+            <div class="card-body">
+                <p style="font-size:13px;color:var(--text-secondary);margin-bottom:12px;">
+                    Upload a photo to test face recognition and mark attendance manually.
+                </p>
+                <input type="file" id="manualCheckinFile" accept="image/*" style="margin-bottom:12px;">
+                <button class="btn btn-primary btn-sm" onclick="manualCheckin()">Process Photo</button>
+                <div id="manualCheckinResult" style="margin-top:12px;"></div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Staff Management Tab -->
+    <div id="tab-staff" class="tab-content" style="display:none;">
+        <div class="card">
+            <div class="card-header">
+                <h3>Registered Staff</h3>
+                <button class="btn btn-primary btn-sm" onclick="showAddStaffModal()">+ Add Staff</button>
+            </div>
+            <div class="card-body">
+                <table>
+                    <thead>
+                        <tr>
+                            <th>ID</th>
+                            <th>Name</th>
+                            <th>Designation</th>
+                            <th>Department</th>
+                            <th>Phone</th>
+                            <th>Faces</th>
+                            <th>Status</th>
+                            <th>Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody id="staffTable"></tbody>
+                </table>
+                <div class="empty-state" id="staffEmpty" style="display:none;">
+                    <div class="icon">👤</div>
+                    <h3>No staff registered yet</h3>
+                    <p>Click "Add Staff" to register the first staff member.</p>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Cameras Tab -->
+    <div id="tab-cameras" class="tab-content" style="display:none;">
+        <div class="card">
+            <div class="card-header">
+                <h3>Camera Configuration</h3>
+                <button class="btn btn-primary btn-sm" onclick="showAddCameraModal()">+ Add Camera</button>
+            </div>
+            <div class="card-body">
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Name</th>
+                            <th>Type</th>
+                            <th>Source</th>
+                            <th>Status</th>
+                            <th>Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody id="cameraTable"></tbody>
+                </table>
+                <div class="empty-state" id="cameraEmpty" style="display:none;">
+                    <div class="icon">📹</div>
+                    <h3>No cameras configured</h3>
+                    <p>Add a camera to start monitoring.</p>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Attendance Log Tab -->
+    <div id="tab-attendance" class="tab-content" style="display:none;">
+        <div class="card">
+            <div class="card-header">
+                <h3>Attendance Log</h3>
+                <div style="display:flex;gap:10px;align-items:center;">
+                    <input type="date" class="form-control" id="attendanceDate"
+                           style="width:auto;padding:6px 10px;">
+                    <button class="btn btn-outline btn-sm" onclick="loadAttendanceLog()">Load</button>
+                    <button class="btn btn-primary btn-sm" onclick="exportAttendance()">Export CSV</button>
+                </div>
+            </div>
+            <div class="card-body">
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Staff ID</th>
+                            <th>Name</th>
+                            <th>Status</th>
+                            <th>Time</th>
+                            <th>Confidence</th>
+                            <th>Camera</th>
+                        </tr>
+                    </thead>
+                    <tbody id="attendanceLogTable"></tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <!-- Reports Tab -->
+    <div id="tab-reports" class="tab-content" style="display:none;">
+        <div class="card">
+            <div class="card-header">
+                <h3>Attendance Report</h3>
+            </div>
+            <div class="card-body">
+                <div class="form-row" style="margin-bottom:16px;">
+                    <div class="form-group">
+                        <label>Date</label>
+                        <input type="date" class="form-control" id="reportDate">
+                    </div>
+                    <div class="form-group" style="display:flex;align-items:flex-end;">
+                        <button class="btn btn-primary" onclick="loadReport()">Generate Report</button>
+                    </div>
+                </div>
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Staff ID</th>
+                            <th>Name</th>
+                            <th>Designation</th>
+                            <th>Department</th>
+                            <th>Status</th>
+                            <th>Time In</th>
+                        </tr>
+                    </thead>
+                    <tbody id="reportTable"></tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <!-- Settings Tab -->
+    <div id="tab-settings" class="tab-content" style="display:none;">
+        <div class="card">
+            <div class="card-header">
+                <h3>System Settings</h3>
+            </div>
+            <div class="card-body">
+                <div class="form-group">
+                    <label>Office Name</label>
+                    <input type="text" class="form-control" id="settOfficeName">
+                </div>
+                <div class="form-row">
+                    <div class="form-group">
+                        <label>Attendance Window Start</label>
+                        <input type="time" class="form-control" id="settStartTime">
+                    </div>
+                    <div class="form-group">
+                        <label>Attendance Window End</label>
+                        <input type="time" class="form-control" id="settEndTime">
+                    </div>
+                </div>
+                <div class="form-row">
+                    <div class="form-group">
+                        <label>Recognition Threshold (0.0 — 1.0)</label>
+                        <input type="number" class="form-control" id="settThreshold" step="0.05" min="0.2" max="0.9">
+                    </div>
+                    <div class="form-group">
+                        <label>Cooldown (seconds)</label>
+                        <input type="number" class="form-control" id="settCooldown" min="60" step="60">
+                    </div>
+                </div>
+                <div class="form-group">
+                    <label>Snapshot Interval (seconds)</label>
+                    <input type="number" class="form-control" id="settInterval" min="1" max="60">
+                </div>
+                <button class="btn btn-primary" onclick="saveSettings()">Save Settings</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Add Staff Modal -->
+<div class="modal-overlay" id="staffModal">
+    <div class="modal">
+        <div class="modal-header">
+            <h3>Add Staff Member</h3>
+            <button class="modal-close" onclick="closeModal('staffModal')">&times;</button>
+        </div>
+        <div class="modal-body">
+            <div class="form-row">
+                <div class="form-group">
+                    <label>Staff ID *</label>
+                    <input type="text" class="form-control" id="newStaffId" placeholder="e.g. STF001">
+                </div>
+                <div class="form-group">
+                    <label>Full Name *</label>
+                    <input type="text" class="form-control" id="newStaffName" placeholder="Full name">
+                </div>
+            </div>
+            <div class="form-row">
+                <div class="form-group">
+                    <label>Designation</label>
+                    <input type="text" class="form-control" id="newStaffDesignation" placeholder="e.g. Section Officer">
+                </div>
+                <div class="form-group">
+                    <label>Department</label>
+                    <input type="text" class="form-control" id="newStaffDept" placeholder="e.g. Legislative">
+                </div>
+            </div>
+            <div class="form-row">
+                <div class="form-group">
+                    <label>Phone</label>
+                    <input type="text" class="form-control" id="newStaffPhone" placeholder="+91...">
+                </div>
+                <div class="form-group">
+                    <label>Email</label>
+                    <input type="text" class="form-control" id="newStaffEmail" placeholder="email@gov.in">
+                </div>
+            </div>
+            <div class="form-group">
+                <label>Face Photo *</label>
+                <div class="photo-upload" id="staffPhotoUpload" onclick="document.getElementById('staffPhotoFile').click()">
+                    <p>Click to upload a clear face photo</p>
+                    <input type="file" id="staffPhotoFile" accept="image/*" style="display:none"
+                           onchange="previewStaffPhoto(this)">
+                </div>
+            </div>
+        </div>
+        <div class="modal-footer">
+            <button class="btn btn-outline" onclick="closeModal('staffModal')">Cancel</button>
+            <button class="btn btn-primary" onclick="addStaff()">Register Staff</button>
+        </div>
+    </div>
+</div>
+
+<!-- Add Camera Modal -->
+<div class="modal-overlay" id="cameraModal">
+    <div class="modal">
+        <div class="modal-header">
+            <h3>Add Camera</h3>
+            <button class="modal-close" onclick="closeModal('cameraModal')">&times;</button>
+        </div>
+        <div class="modal-body">
+            <div class="form-group">
+                <label>Camera Name *</label>
+                <input type="text" class="form-control" id="newCamName" placeholder="e.g. Main Entrance">
+            </div>
+            <div class="form-group">
+                <label>Source Type</label>
+                <select class="form-control" id="newCamType" onchange="toggleCameraFields()">
+                    <option value="rtsp">RTSP Stream</option>
+                    <option value="hikvision">Hikvision ISAPI</option>
+                    <option value="webcam">USB Webcam</option>
+                    <option value="url">Image URL (Test)</option>
+                </select>
+            </div>
+            <div id="camFieldsRtsp">
+                <div class="form-group">
+                    <label>RTSP URL</label>
+                    <input type="text" class="form-control" id="newCamRtspUrl"
+                           placeholder="rtsp://user:pass@ip:554/stream">
+                </div>
+            </div>
+            <div id="camFieldsHikvision" style="display:none;">
+                <div class="form-row">
+                    <div class="form-group">
+                        <label>IP Address</label>
+                        <input type="text" class="form-control" id="newCamIp" placeholder="192.168.1.100">
+                    </div>
+                    <div class="form-group">
+                        <label>Port</label>
+                        <input type="number" class="form-control" id="newCamPort" value="80">
+                    </div>
+                </div>
+                <div class="form-row">
+                    <div class="form-group">
+                        <label>Username</label>
+                        <input type="text" class="form-control" id="newCamUser" value="admin">
+                    </div>
+                    <div class="form-group">
+                        <label>Password</label>
+                        <input type="password" class="form-control" id="newCamPass">
+                    </div>
+                </div>
+                <div class="form-group">
+                    <label>Channel</label>
+                    <input type="number" class="form-control" id="newCamChannel" value="1" min="1">
+                </div>
+            </div>
+            <div id="camFieldsWebcam" style="display:none;">
+                <div class="form-group">
+                    <label>Device Index</label>
+                    <input type="number" class="form-control" id="newCamDeviceIdx" value="0" min="0">
+                </div>
+            </div>
+            <div id="camFieldsUrl" style="display:none;">
+                <div class="form-group">
+                    <label>Image URL</label>
+                    <input type="text" class="form-control" id="newCamTestUrl"
+                           placeholder="https://example.com/image.jpg">
+                </div>
+            </div>
+            <div class="form-group">
+                <label>Description</label>
+                <input type="text" class="form-control" id="newCamDesc" placeholder="Optional description">
+            </div>
+        </div>
+        <div class="modal-footer">
+            <button class="btn btn-outline" onclick="closeModal('cameraModal')">Cancel</button>
+            <button class="btn btn-primary" onclick="addCamera()">Add Camera</button>
+        </div>
+    </div>
+</div>
+
+<!-- Register Face Modal (for existing staff) -->
+<div class="modal-overlay" id="faceModal">
+    <div class="modal">
+        <div class="modal-header">
+            <h3>Register Additional Face</h3>
+            <button class="modal-close" onclick="closeModal('faceModal')">&times;</button>
+        </div>
+        <div class="modal-body">
+            <p style="margin-bottom:12px;font-size:13px;color:var(--text-secondary);">
+                Adding face for: <strong id="faceModalStaffName"></strong> (<span id="faceModalStaffId"></span>)
+            </p>
+            <div class="form-group">
+                <label>Angle</label>
+                <select class="form-control" id="faceAngle">
+                    <option value="front">Front</option>
+                    <option value="left">Left</option>
+                    <option value="right">Right</option>
+                    <option value="up">Up</option>
+                </select>
+            </div>
+            <div class="form-group">
+                <label>Photo</label>
+                <div class="photo-upload" id="facePhotoUpload" onclick="document.getElementById('facePhotoFile').click()">
+                    <p>Click to upload face photo</p>
+                    <input type="file" id="facePhotoFile" accept="image/*" style="display:none"
+                           onchange="previewFacePhoto(this)">
+                </div>
+            </div>
+        </div>
+        <div class="modal-footer">
+            <button class="btn btn-outline" onclick="closeModal('faceModal')">Cancel</button>
+            <button class="btn btn-primary" onclick="registerFace()">Register Face</button>
+        </div>
+    </div>
+</div>
+
+<!-- Toast Container -->
+<div class="toast-container" id="toastContainer"></div>
+
+<script src="/static/js/app.js"></script>
+</body>
+</html>
