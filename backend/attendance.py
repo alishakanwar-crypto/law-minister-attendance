@@ -19,7 +19,7 @@ from backend import face_engine
 from backend import camera as cam
 from backend import whatsapp as wa
 from backend.config import load_config
-from backend.liveness import LivenessChecker
+from backend.liveness import LivenessChecker, texture_score, TEXTURE_THRESHOLD
 
 logger = logging.getLogger("attendance.engine")
 
@@ -78,12 +78,14 @@ class AttendanceEngine:
         self,
         image_bytes: bytes,
         camera_name: str,
-        skip_liveness: bool = False,
+        single_frame: bool = False,
     ) -> list[dict]:
         """Process a single frame: detect faces, match, log attendance.
 
         Args:
-            skip_liveness: bypass multi-frame liveness checks (for manual check-in).
+            single_frame: when True, skip multi-frame checks (blink, motion)
+                but still run single-frame texture analysis to reject flat
+                surfaces (printed photos, screens).
 
         Returns list of attendance records created.
         """
@@ -114,9 +116,22 @@ class AttendanceEngine:
                 continue
 
             # --- Anti-spoofing liveness check ---
-            if skip_liveness:
-                liveness = {"live": True, "reason": "skipped",
-                            "motion": 0.0, "texture": 0.0, "blink": False}
+            if single_frame:
+                # Single-image mode: run texture analysis only
+                tscore = 999.0
+                if face_crop_bgr is not None and face_crop_bgr.size > 0:
+                    tscore = texture_score(face_crop_bgr)
+                if tscore < TEXTURE_THRESHOLD:
+                    self._stats["spoofs_rejected"] += 1
+                    logger.warning(
+                        f"SPOOF REJECTED (manual): {name} ({staff_id}) — "
+                        f"flat_surface texture={tscore:.1f}"
+                    )
+                    self._liveness._log_spoof(staff_id, "flat_surface_manual", tscore)
+                    continue
+                liveness = {"live": True, "reason": "single_frame_texture_ok",
+                            "motion": 0.0, "texture": round(tscore, 2),
+                            "blink": False}
             else:
                 liveness = self._liveness.update(
                     staff_id=staff_id,
@@ -243,11 +258,11 @@ class AttendanceEngine:
                              camera_name: str = "manual") -> list[dict]:
         """Process a single image (for testing / manual check-in).
 
-        Liveness is skipped because a single image cannot satisfy
-        multi-frame checks (blink, motion).  Admin-initiated uploads
-        are considered trusted.
+        Multi-frame checks (blink, motion) are skipped because a single
+        image cannot satisfy them.  Texture analysis is still performed
+        to reject flat surfaces (printed photos, screens).
         """
-        return self._process_frame(image_bytes, camera_name, skip_liveness=True)
+        return self._process_frame(image_bytes, camera_name, single_frame=True)
 
 
 engine = AttendanceEngine()
