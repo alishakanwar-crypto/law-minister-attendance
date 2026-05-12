@@ -74,8 +74,16 @@ class AttendanceEngine:
     def _set_cooldown(self, staff_id: str):
         self._cooldowns[staff_id] = time.time()
 
-    def _process_frame(self, image_bytes: bytes, camera_name: str) -> list[dict]:
+    def _process_frame(
+        self,
+        image_bytes: bytes,
+        camera_name: str,
+        skip_liveness: bool = False,
+    ) -> list[dict]:
         """Process a single frame: detect faces, match, log attendance.
+
+        Args:
+            skip_liveness: bypass multi-frame liveness checks (for manual check-in).
 
         Returns list of attendance records created.
         """
@@ -106,32 +114,37 @@ class AttendanceEngine:
                 continue
 
             # --- Anti-spoofing liveness check ---
-            liveness = self._liveness.update(
-                staff_id=staff_id,
-                face_obj=face_obj,
-                face_crop_bgr=face_crop_bgr,
-            )
+            if skip_liveness:
+                liveness = {"live": True, "reason": "skipped",
+                            "motion": 0.0, "texture": 0.0, "blink": False}
+            else:
+                liveness = self._liveness.update(
+                    staff_id=staff_id,
+                    face_obj=face_obj,
+                    face_crop_bgr=face_crop_bgr,
+                )
 
-            if not liveness["live"]:
-                reason = liveness["reason"]
-                if reason not in ("collecting_frames", "waiting_for_blink",
-                                  "need 1 more frame(s)",
-                                  "need 2 more frame(s)",
-                                  "need 3 more frame(s)"):
-                    # Definite spoof — reject and log
-                    if not reason.startswith("need"):
-                        self._stats["spoofs_rejected"] += 1
-                        logger.warning(
-                            f"SPOOF REJECTED: {name} ({staff_id}) — "
-                            f"reason={reason} motion={liveness['motion']} "
-                            f"texture={liveness['texture']}"
-                        )
-                        self._liveness.reset(staff_id)
-                # Still collecting evidence or waiting — skip this frame
-                continue
+                if not liveness["live"]:
+                    reason = liveness["reason"]
+                    if reason not in ("collecting_frames", "waiting_for_blink",
+                                      "need 1 more frame(s)",
+                                      "need 2 more frame(s)",
+                                      "need 3 more frame(s)"):
+                        # Definite spoof — reject and log
+                        if not reason.startswith("need"):
+                            self._stats["spoofs_rejected"] += 1
+                            logger.warning(
+                                f"SPOOF REJECTED: {name} ({staff_id}) — "
+                                f"reason={reason} motion={liveness['motion']} "
+                                f"texture={liveness['texture']}"
+                            )
+                            self._liveness.reset(staff_id)
+                    # Still collecting evidence or waiting — skip this frame
+                    continue
 
-            # Liveness confirmed — mark attendance
-            self._liveness.reset(staff_id)
+                # Liveness confirmed via camera monitoring
+                self._liveness.reset(staff_id)
+
             self._set_cooldown(staff_id)
 
             ts = int(time.time())
@@ -228,8 +241,13 @@ class AttendanceEngine:
 
     def process_single_image(self, image_bytes: bytes,
                              camera_name: str = "manual") -> list[dict]:
-        """Process a single image (for testing / manual check-in)."""
-        return self._process_frame(image_bytes, camera_name)
+        """Process a single image (for testing / manual check-in).
+
+        Liveness is skipped because a single image cannot satisfy
+        multi-frame checks (blink, motion).  Admin-initiated uploads
+        are considered trusted.
+        """
+        return self._process_frame(image_bytes, camera_name, skip_liveness=True)
 
 
 engine = AttendanceEngine()
