@@ -223,6 +223,15 @@ async def engine_status():
     return attendance_engine.stats
 
 
+# ---- Anti-Spoofing / Liveness ----
+
+@app.get("/api/security/spoof-log")
+async def spoof_log(limit: int = Query(50, le=200)):
+    """Return recent spoof/liveness rejection attempts."""
+    entries = attendance_engine._liveness.get_security_log(limit=limit)
+    return {"spoof_attempts": entries, "count": len(entries)}
+
+
 # ---- Camera Management ----
 
 @app.get("/api/cameras")

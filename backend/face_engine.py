@@ -83,10 +83,15 @@ def preprocess_image(image_bytes: bytes) -> bytes:
         return image_bytes
 
 
-def detect_and_encode(image_bytes: bytes) -> list[tuple[np.ndarray, bytes, list[int]]]:
+def detect_and_encode(
+    image_bytes: bytes,
+    return_face_objects: bool = False,
+) -> list[tuple]:
     """Detect all faces in an image and return their embeddings.
 
     Returns list of (embedding_512d, cropped_face_jpeg, bbox_xyxy).
+    If return_face_objects=True, each tuple also includes (face_obj, face_crop_bgr)
+    for liveness analysis.
     """
     app = get_insightface_app()
     if app is None:
@@ -125,7 +130,12 @@ def detect_and_encode(image_bytes: bytes) -> list[tuple[np.ndarray, bytes, list[
         pil_crop.save(buf, format="JPEG", quality=85)
         cropped_bytes = buf.getvalue()
 
-        results.append((embedding, cropped_bytes, bbox))
+        if return_face_objects:
+            # BGR crop for texture analysis
+            face_crop_bgr = img_bgr[cy1:cy2, cx1:cx2].copy()
+            results.append((embedding, cropped_bytes, bbox, face, face_crop_bgr))
+        else:
+            results.append((embedding, cropped_bytes, bbox))
 
     return results
 
