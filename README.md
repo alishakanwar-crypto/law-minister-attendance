@@ -25,27 +25,40 @@ Your PC (runs this software)
 
 ## Quick Start
 
-### 1. Install Dependencies
+### Option A: Standalone Desktop App (Recommended)
 
 ```bash
 # Python 3.10+ required
 pip install -r requirements.txt
+python desktop_app.py
 ```
 
-### 2. Run the Application
+The desktop app opens with a full GUI — no browser needed. Everything runs in one window.
+
+### Option B: Web Dashboard
 
 ```bash
+pip install -r requirements.txt
 python -m backend.main
 ```
 
 Open **http://localhost:8900** in your browser.
 
-### 3. Setup Steps
+### Option C: Build Windows .exe
 
-1. **Add Staff** — Go to Staff Management → Add Staff (with face photo)
-2. **Add Camera** — Go to Cameras → Add Camera (enter IP/RTSP details)
-3. **Configure** — Go to Settings → Set attendance window, threshold
-4. **Start Engine** — Click "Start" in the header to begin monitoring
+```bash
+pip install -r requirements.txt
+python build_exe.py
+```
+
+This creates `dist/LawMinisterAttendance/LawMinisterAttendance.exe` — double-click to run.
+
+### Setup Steps
+
+1. **Add Staff** — Go to Staff tab → Add Staff (with face photo)
+2. **Add Camera** — Go to Cameras tab → Add Camera (enter IP/RTSP details)
+3. **Configure** — Go to Settings tab → Set attendance window, threshold
+4. **Start Engine** — Click "▶ Start" in the header to begin monitoring
 
 ## Camera Setup
 
@@ -97,10 +110,12 @@ Settings can be changed via the dashboard or `config.json`:
 ## Technology
 
 - **InsightFace buffalo_l** — 512-dimensional ArcFace facial embeddings
-- **FastAPI** — async Python web framework
+- **CustomTkinter** — modern desktop GUI framework
+- **FastAPI** — async Python web framework (web dashboard mode)
 - **SQLite** — local database (WAL mode)
 - **OpenCV** — camera frame capture
 - **Pillow** — image preprocessing
+- **PyInstaller** — Windows .exe packaging
 
 ## Project by
 
