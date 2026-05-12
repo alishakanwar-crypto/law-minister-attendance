@@ -19,6 +19,7 @@ from backend import face_engine
 from backend import camera as cam
 from backend import whatsapp as wa
 from backend.config import load_config
+from backend.liveness import LivenessChecker
 
 logger = logging.getLogger("attendance.engine")
 
@@ -33,10 +34,12 @@ class AttendanceEngine:
         self.running = False
         self._task: asyncio.Task | None = None
         self._cooldowns: dict[str, float] = {}
+        self._liveness = LivenessChecker()
         self._stats = {
             "frames_processed": 0,
             "faces_detected": 0,
             "matches_found": 0,
+            "spoofs_rejected": 0,
             "started_at": None,
             "last_frame_at": None,
         }
@@ -80,7 +83,9 @@ class AttendanceEngine:
         threshold = cfg.get("recognition_threshold", 0.45)
 
         enhanced = face_engine.preprocess_image(image_bytes)
-        detections = face_engine.detect_and_encode(enhanced)
+        detections = face_engine.detect_and_encode(
+            enhanced, return_face_objects=True,
+        )
         self._stats["frames_processed"] += 1
         self._stats["last_frame_at"] = datetime.now().isoformat()
 
@@ -90,7 +95,7 @@ class AttendanceEngine:
         self._stats["faces_detected"] += len(detections)
         records = []
 
-        for embedding, cropped_face, bbox in detections:
+        for embedding, cropped_face, bbox, face_obj, face_crop_bgr in detections:
             match = face_engine.match_face(embedding, threshold=threshold)
             if match is None:
                 continue
@@ -100,6 +105,33 @@ class AttendanceEngine:
             if self._check_cooldown(staff_id):
                 continue
 
+            # --- Anti-spoofing liveness check ---
+            liveness = self._liveness.update(
+                staff_id=staff_id,
+                face_obj=face_obj,
+                face_crop_bgr=face_crop_bgr,
+            )
+
+            if not liveness["live"]:
+                reason = liveness["reason"]
+                if reason not in ("collecting_frames", "waiting_for_blink",
+                                  "need 1 more frame(s)",
+                                  "need 2 more frame(s)",
+                                  "need 3 more frame(s)"):
+                    # Definite spoof — reject and log
+                    if not reason.startswith("need"):
+                        self._stats["spoofs_rejected"] += 1
+                        logger.warning(
+                            f"SPOOF REJECTED: {name} ({staff_id}) — "
+                            f"reason={reason} motion={liveness['motion']} "
+                            f"texture={liveness['texture']}"
+                        )
+                        self._liveness.reset(staff_id)
+                # Still collecting evidence or waiting — skip this frame
+                continue
+
+            # Liveness confirmed — mark attendance
+            self._liveness.reset(staff_id)
             self._set_cooldown(staff_id)
 
             ts = int(time.time())
@@ -124,11 +156,18 @@ class AttendanceEngine:
                 "confidence": round(confidence, 4),
                 "camera": camera_name,
                 "time": datetime.now().strftime("%H:%M:%S"),
+                "liveness": {
+                    "motion": liveness["motion"],
+                    "texture": liveness["texture"],
+                    "blink": liveness["blink"],
+                },
             }
             records.append(record)
             logger.info(
                 f"Attendance: {name} ({staff_id}) — "
-                f"confidence={confidence:.3f} camera={camera_name}"
+                f"confidence={confidence:.3f} camera={camera_name} "
+                f"liveness=OK motion={liveness['motion']} "
+                f"texture={liveness['texture']}"
             )
             wa.notify_checkin(
                 cfg, staff_name=name, staff_id=staff_id,

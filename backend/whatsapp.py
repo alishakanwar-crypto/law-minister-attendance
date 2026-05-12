@@ -4,6 +4,7 @@ WhatsApp Cloud API integration for attendance notifications.
 Uses Meta Cloud API exclusively (no Green API per org policy).
 Bot for the Office of Shri Arjun Ram Meghwal Ji, Honourable Law Minister.
 Sends check-in alerts when staff are recognized by the face recognition engine.
+Handles incoming webhook messages and auto-responds based on bot rules.
 """
 
 import logging
@@ -16,6 +17,8 @@ import httpx
 from backend import bot_messages as msgs
 
 logger = logging.getLogger("attendance.whatsapp")
+
+WEBHOOK_VERIFY_TOKEN = os.environ.get("WHATSAPP_WEBHOOK_VERIFY_TOKEN", "law_minister_attendance_bot")
 
 GRAPH_API = "https://graph.facebook.com/v21.0"
 
@@ -209,3 +212,81 @@ def send_daily_summary(cfg: dict, summary: dict):
         args=(cfg, recipient, body),
         daemon=True,
     ).start()
+
+
+# ---------- Webhook Handling ----------
+
+def verify_webhook(mode: str, token: str, challenge: str) -> str | None:
+    """Verify Meta webhook subscription request.
+
+    Returns the challenge string if valid, None otherwise.
+    """
+    if mode == "subscribe" and token == WEBHOOK_VERIFY_TOKEN:
+        logger.info("Webhook verified successfully")
+        return challenge
+    logger.warning(f"Webhook verification failed: mode={mode}")
+    return None
+
+
+def _extract_text_messages(payload: dict) -> list[dict]:
+    """Extract text messages from a Meta webhook payload.
+
+    Returns a list of dicts with keys: from_number, text, message_id, timestamp.
+    """
+    results = []
+    for entry in payload.get("entry", []):
+        for change in entry.get("changes", []):
+            value = change.get("value", {})
+            for message in value.get("messages", []):
+                if message.get("type") == "text":
+                    results.append({
+                        "from_number": message.get("from", ""),
+                        "text": message.get("text", {}).get("body", ""),
+                        "message_id": message.get("id", ""),
+                        "timestamp": message.get("timestamp", ""),
+                    })
+    return results
+
+
+def handle_incoming_webhook(cfg: dict, payload: dict) -> list[dict]:
+    """Process an incoming webhook payload and send auto-responses.
+
+    Returns a list of actions taken (for logging/API response).
+    """
+    messages = _extract_text_messages(payload)
+    actions = []
+
+    for msg in messages:
+        text = msg["text"]
+        from_number = msg["from_number"]
+        auto_reply = msgs.get_auto_response(text)
+
+        if auto_reply:
+            sent = send_text_message(cfg, from_number, auto_reply)
+            category = msgs.classify_message(text)
+            lang = msgs.detect_language(text)
+            actions.append({
+                "from": from_number,
+                "text": text,
+                "category": category,
+                "language": lang,
+                "response_sent": sent,
+            })
+            logger.info(
+                f"Auto-replied to {from_number} "
+                f"({category}/{lang}): {text[:40]}"
+            )
+        else:
+            actions.append({
+                "from": from_number,
+                "text": text,
+                "category": "allowed",
+                "language": msgs.detect_language(text),
+                "response_sent": False,
+                "note": "Office topic — requires further processing",
+            })
+            logger.info(
+                f"Allowed topic from {from_number}: {text[:40]}"
+            )
+
+    return actions

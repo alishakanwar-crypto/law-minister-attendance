@@ -14,8 +14,8 @@ from contextlib import asynccontextmanager
 from datetime import date, datetime
 from pathlib import Path
 
-from fastapi import FastAPI, File, Form, Request, UploadFile, HTTPException
-from fastapi.responses import HTMLResponse, JSONResponse, FileResponse
+from fastapi import FastAPI, File, Form, Query, Request, UploadFile, HTTPException
+from fastapi.responses import HTMLResponse, JSONResponse, FileResponse, PlainTextResponse
 from fastapi.staticfiles import StaticFiles
 
 from backend import database as db
@@ -223,6 +223,15 @@ async def engine_status():
     return attendance_engine.stats
 
 
+# ---- Anti-Spoofing / Liveness ----
+
+@app.get("/api/security/spoof-log")
+async def spoof_log(limit: int = Query(50, le=200)):
+    """Return recent spoof/liveness rejection attempts."""
+    entries = attendance_engine._liveness.get_security_log(limit=limit)
+    return {"spoof_attempts": entries, "count": len(entries)}
+
+
 # ---- Camera Management ----
 
 @app.get("/api/cameras")
@@ -346,6 +355,44 @@ async def send_template(request: Request):
     cfg = load_config()
     ok = wa.send_template_message(cfg, recipient, template_name, parameters)
     return {"success": ok}
+
+
+# ---- WhatsApp Webhook (incoming messages) ----
+
+@app.get("/api/whatsapp/webhook")
+async def webhook_verify(
+    hub_mode: str = Query(None, alias="hub.mode"),
+    hub_verify_token: str = Query(None, alias="hub.verify_token"),
+    hub_challenge: str = Query(None, alias="hub.challenge"),
+):
+    """Meta webhook verification (GET request).
+
+    Meta sends a GET with hub.mode, hub.verify_token, and hub.challenge.
+    We must return the challenge value if the token matches.
+    """
+    if not hub_mode or not hub_verify_token or not hub_challenge:
+        raise HTTPException(400, "Missing verification parameters")
+
+    challenge = wa.verify_webhook(hub_mode, hub_verify_token, hub_challenge)
+    if challenge is not None:
+        return PlainTextResponse(content=challenge)
+    raise HTTPException(403, "Verification failed")
+
+
+@app.post("/api/whatsapp/webhook")
+async def webhook_receive(request: Request):
+    """Receive incoming WhatsApp messages from Meta webhook.
+
+    Auto-responds to greetings and unrelated messages per bot rules.
+    Supports Hindi, English, and Hinglish language detection.
+    """
+    payload = await request.json()
+    logger.info(f"Webhook received: {payload.get('object', 'unknown')}")
+
+    cfg = load_config()
+    actions = wa.handle_incoming_webhook(cfg, payload)
+
+    return JSONResponse(content={"status": "ok", "actions": actions})
 
 
 # ---- Export ----
