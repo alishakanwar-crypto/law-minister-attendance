@@ -11,7 +11,7 @@ logger = logging.getLogger("attendance.config")
 CONFIG_FILE = Path(__file__).parent.parent / "config.json"
 
 DEFAULT_CONFIG = {
-    "office_name": "Law Minister's Office",
+    "office_name": "Office of Shri Arjun Ram Meghwal Ji, Honourable Law Minister",
     "cameras": [],
     "attendance_start_hour": 9,
     "attendance_start_minute": 0,

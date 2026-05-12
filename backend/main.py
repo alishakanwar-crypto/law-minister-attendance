@@ -310,14 +310,41 @@ async def test_whatsapp(request: Request):
     cfg = load_config()
     cfg["whatsapp_enabled"] = True
     cfg["whatsapp_recipient"] = recipient
-    office = cfg.get("office_name", "Law Minister's Office")
     body = (
-        f"*{office} \u2014 Test Message*\n\n"
-        f"WhatsApp notifications are configured and working.\n"
-        f"Check-in alerts will be sent to this number.\n\n"
-        f"_LEGIT COMMUNISYS \u2014 Automated Notification_"
+        "Office Attendance System — Test Message\n\n"
+        "WhatsApp notifications are configured and working.\n"
+        "Attendance alerts will be sent to this number.\n\n"
+        "Office of Shri Arjun Ram Meghwal Ji\n"
+        "Honourable Law Minister\n"
+        "— LEGIT COMMUNISYS"
     )
     ok = wa.send_text_message(cfg, recipient, body)
+    return {"success": ok}
+
+
+@app.post("/api/whatsapp/welcome")
+async def send_welcome(request: Request):
+    """Send the face registration welcome message to a staff member."""
+    data = await request.json()
+    recipient = data.get("recipient", "")
+    if not recipient:
+        raise HTTPException(400, "Recipient number required")
+    cfg = load_config()
+    ok = wa.send_welcome_message(cfg, recipient)
+    return {"success": ok}
+
+
+@app.post("/api/whatsapp/template")
+async def send_template(request: Request):
+    """Send a pre-approved template message (bypasses 24h opt-in)."""
+    data = await request.json()
+    recipient = data.get("recipient", "")
+    template_name = data.get("template", "")
+    parameters = data.get("parameters", [])
+    if not recipient or not template_name:
+        raise HTTPException(400, "recipient and template required")
+    cfg = load_config()
+    ok = wa.send_template_message(cfg, recipient, template_name, parameters)
     return {"success": ok}
 
 
