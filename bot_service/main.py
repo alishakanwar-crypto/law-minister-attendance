@@ -18,8 +18,11 @@ import os
 from contextlib import asynccontextmanager
 from datetime import datetime, timezone, timedelta
 
+from pathlib import Path
+
 from fastapi import FastAPI, Request, Query
-from fastapi.responses import JSONResponse, PlainTextResponse
+from fastapi.responses import JSONResponse, PlainTextResponse, HTMLResponse
+from fastapi.staticfiles import StaticFiles
 
 from bot_service.config import (
     WEBHOOK_VERIFY_TOKEN, LAW_MINISTER_PHONE_ID, HOST, PORT, ADMINS,
@@ -83,6 +86,21 @@ app = FastAPI(
     version="2.0.0",
     lifespan=lifespan,
 )
+
+
+# ---------- Static / Dashboard ----------
+
+STATIC_DIR = Path(__file__).parent / "static"
+
+
+@app.get("/dashboard", response_class=HTMLResponse)
+async def dashboard():
+    """Serve the web-based command centre."""
+    index_file = STATIC_DIR / "index.html"
+    return HTMLResponse(content=index_file.read_text())
+
+
+app.mount("/static", StaticFiles(directory=str(STATIC_DIR)), name="static")
 
 
 # ---------- Health ----------
