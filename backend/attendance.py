@@ -184,6 +184,7 @@ class AttendanceEngine:
                 "confidence": round(confidence, 4),
                 "camera": camera_name,
                 "time": datetime.now().strftime("%H:%M:%S"),
+                "snapshot_path": str(snap_path),
                 "liveness": {
                     "motion": liveness["motion"],
                     "texture": liveness["texture"],
@@ -200,6 +201,7 @@ class AttendanceEngine:
             wa.notify_checkin(
                 cfg, staff_name=name, staff_id=staff_id,
                 confidence=confidence, camera=camera_name,
+                snapshot_path=str(snap_path),
             )
 
         return records

@@ -465,17 +465,18 @@ class AttendanceApp(ctk.CTk if CTK else tk.Tk):
                         camera_source="manual",
                     )
                     results.append(f"{name} ({confidence:.1%})")
-                    matched.append((staff_id, name, confidence))
+                    matched.append((staff_id, name, confidence, str(snap_path)))
 
             if results:
                 msg = "Matched: " + ", ".join(results)
                 self.after(0, lambda: self.checkin_result.configure(
                     text=msg, text_color=SUCCESS))
                 self.after(0, self._refresh_dashboard)
-                for staff_id, name, confidence in matched:
+                for staff_id, name, confidence, snap in matched:
                     wa.notify_checkin(
                         cfg, staff_name=name, staff_id=staff_id,
                         confidence=confidence, camera="manual",
+                        snapshot_path=snap,
                     )
             else:
                 self.after(0, lambda: self.checkin_result.configure(
@@ -1104,6 +1105,7 @@ class AttendanceApp(ctk.CTk if CTK else tk.Tk):
                 staff_id=r["staff_id"],
                 confidence=r.get("confidence", 0.0),
                 camera=r.get("camera", "unknown"),
+                snapshot_path=r.get("snapshot_path"),
             )
         self._refresh_dashboard()
 
