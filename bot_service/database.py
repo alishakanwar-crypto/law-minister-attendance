@@ -120,7 +120,8 @@ async def add_staff(name: str, phone: str, designation: str = "") -> bool:
     db = await get_db()
     try:
         await db.execute(
-            "INSERT OR REPLACE INTO staff (name, phone, designation) VALUES (?, ?, ?)",
+            "INSERT INTO staff (name, phone, designation) VALUES (?, ?, ?) "
+            "ON CONFLICT(phone) DO UPDATE SET name=excluded.name, designation=excluded.designation",
             (name, phone, designation),
         )
         await db.commit()
