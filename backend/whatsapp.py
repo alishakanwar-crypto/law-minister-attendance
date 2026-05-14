@@ -174,10 +174,12 @@ def send_image_message(cfg: dict, to: str, media_id: str,
 
 def send_template_message(cfg: dict, to: str, template_name: str,
                           parameters: list[str] | None = None,
-                          language: str = "en") -> bool:
+                          language: str = "en",
+                          header_media_id: str | None = None) -> bool:
     """Send a pre-approved template message via Meta Cloud API.
 
     Template messages bypass the 24-hour opt-in window.
+    If header_media_id is provided, the template header is set to that image.
     """
     token = _get_token()
     phone_id = _get_phone_id(cfg)
@@ -198,13 +200,25 @@ def send_template_message(cfg: dict, to: str, template_name: str,
         "name": template_name,
         "language": {"code": language},
     }
+
+    components = []
+    if header_media_id:
+        components.append({
+            "type": "header",
+            "parameters": [{
+                "type": "image",
+                "image": {"id": header_media_id},
+            }],
+        })
     if parameters:
-        template_obj["components"] = [{
+        components.append({
             "type": "body",
             "parameters": [
                 {"type": "text", "text": p} for p in parameters
             ],
-        }]
+        })
+    if components:
+        template_obj["components"] = components
 
     payload = {
         "messaging_product": "whatsapp",
@@ -244,31 +258,59 @@ def send_registration_rejected(cfg: dict, to: str, reason: str) -> bool:
     return send_text_message(cfg, to, msgs.registration_rejected(reason))
 
 
-def _send_checkin_with_snapshot(cfg: dict, recipient: str, body: str,
+ATTENDANCE_TEMPLATE = "office_attendance"
+
+
+def _send_checkin_with_snapshot(cfg: dict, recipient: str,
+                                staff_name: str, date_str: str,
+                                time_str: str,
                                 snapshot_path: str | None):
-    """Upload snapshot and send image+caption, falling back to text-only."""
+    """Send attendance notification using the Meta-approved template.
+
+    Priority chain:
+    1. Template message with image header (works outside 24h window)
+    2. Image message with caption (fallback if template fails)
+    3. Text-only message (final fallback)
+    """
+    media_id = None
     if snapshot_path:
         media_id = upload_media(cfg, snapshot_path)
-        if media_id:
-            sent = send_image_message(cfg, recipient, media_id, caption=body)
-            if sent:
-                return
-            logger.warning("Image send failed, falling back to text-only")
+
+    # Try template message first (bypasses 24h opt-in window)
+    sent = send_template_message(
+        cfg, recipient, ATTENDANCE_TEMPLATE,
+        parameters=[staff_name, date_str, time_str],
+        header_media_id=media_id,
+    )
+    if sent:
+        return
+
+    logger.warning("Template send failed, falling back to image+caption")
+
+    # Fallback: image with caption
+    body = msgs.attendance_notification(
+        name=staff_name, date_str=date_str, time_str=time_str, status="Present",
+    )
+    if media_id:
+        sent = send_image_message(cfg, recipient, media_id, caption=body)
+        if sent:
+            return
+        logger.warning("Image send failed, falling back to text-only")
+
+    # Final fallback: text-only
     send_text_message(cfg, recipient, body)
 
 
 def notify_checkin(cfg: dict, staff_name: str, staff_id: str,
                    confidence: float, camera: str,
                    snapshot_path: str | None = None):
-    """Send attendance notification with snapshot image.
+    """Send attendance notification with snapshot via Meta template.
 
-    Uses the government-office spec:
-      Attendance Marked Successfully
-      Name / Date / Time / Status: Present
+    Uses the approved 'office_attendance' template with:
+      Header: Face snapshot image
+      Body: employee_name, date, time
 
-    If snapshot_path is provided, the face snapshot is sent as an image
-    with the attendance text as caption. Falls back to text-only if
-    the image upload fails.
+    Falls back to image+caption, then text-only if template fails.
     """
     if not is_configured(cfg):
         return
@@ -278,16 +320,9 @@ def notify_checkin(cfg: dict, staff_name: str, staff_id: str,
     time_str = now.strftime("%I:%M %p")
     date_str = now.strftime("%d/%m/%Y")
 
-    body = msgs.attendance_notification(
-        name=staff_name,
-        date_str=date_str,
-        time_str=time_str,
-        status="Present",
-    )
-
     threading.Thread(
         target=_send_checkin_with_snapshot,
-        args=(cfg, recipient, body, snapshot_path),
+        args=(cfg, recipient, staff_name, date_str, time_str, snapshot_path),
         daemon=True,
     ).start()
 
