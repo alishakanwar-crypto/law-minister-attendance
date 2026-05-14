@@ -258,7 +258,7 @@ def send_registration_rejected(cfg: dict, to: str, reason: str) -> bool:
     return send_text_message(cfg, to, msgs.registration_rejected(reason))
 
 
-ATTENDANCE_TEMPLATE = "office_attendance"
+ATTENDANCE_TEMPLATE = "law_minister_attendance_notification"
 
 
 def _send_checkin_with_snapshot(cfg: dict, recipient: str,
