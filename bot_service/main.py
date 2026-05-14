@@ -242,6 +242,13 @@ async def get_attendance(date: str = Query(default="")):
     return JSONResponse(content={"records": records, "count": len(records)})
 
 
+def _cleanup_file(path: str):
+    try:
+        os.unlink(path)
+    except Exception:
+        pass
+
+
 @app.get("/api/report/messages")
 async def download_message_report(days: int = Query(default=7, ge=1, le=90)):
     """Download message report as Excel."""
@@ -249,10 +256,12 @@ async def download_message_report(days: int = Query(default=7, ge=1, le=90)):
     if not filepath:
         return JSONResponse(status_code=404, content={"error": "No data"})
     from fastapi.responses import FileResponse
+    from starlette.background import BackgroundTask
     return FileResponse(
         filepath,
         media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
         filename="message_summary.xlsx",
+        background=BackgroundTask(_cleanup_file, filepath),
     )
 
 
@@ -263,10 +272,12 @@ async def download_attendance_report(date: str = Query(default="")):
     if not filepath:
         return JSONResponse(status_code=404, content={"error": "No data"})
     from fastapi.responses import FileResponse
+    from starlette.background import BackgroundTask
     return FileResponse(
         filepath,
         media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
         filename="attendance_report.xlsx",
+        background=BackgroundTask(_cleanup_file, filepath),
     )
 
 
