@@ -156,8 +156,7 @@ async def notify_attendance(request: Request):
         "staff_name": "Rahul Sharma",
         "phone": "9876543210",
         "date": "07/05/2026",
-        "time": "09:30 AM",
-        "snapshot_path": "/path/to/snapshot.jpg"  (optional)
+        "time": "09:30 AM"
     }
     """
     data = await request.json()
@@ -165,53 +164,19 @@ async def notify_attendance(request: Request):
     phone = data.get("phone", "")
     date_str = data.get("date", "")
     time_str = data.get("time", "")
-    snapshot_path = data.get("snapshot_path", "")
 
     if not staff_name or not phone:
         return JSONResponse(status_code=400, content={"error": "staff_name and phone required"})
 
-    # Try template message with image
-    template_name = "law_minister_attendance_notification"
+    # Send text-only template (no image header)
+    template_name = "law_minister_attendance"
     parameters = [staff_name, date_str, time_str]
 
-    sent = False
-    if snapshot_path and os.path.exists(snapshot_path):
-        # Upload image and send template with header
-        media_id = None
-        try:
-            token = wa._get_token()
-            if token:
-                import httpx
-                headers = {"Authorization": f"Bearer {token}"}
-                upload_url = f"https://graph.facebook.com/v21.0/{LAW_MINISTER_PHONE_ID}/media"
-                async with httpx.AsyncClient(timeout=30.0) as client:
-                    with open(snapshot_path, "rb") as f:
-                        resp = await client.post(
-                            upload_url,
-                            headers=headers,
-                            data={"messaging_product": "whatsapp", "type": "image/jpeg"},
-                            files={"file": (os.path.basename(snapshot_path), f, "image/jpeg")},
-                        )
-                    if resp.status_code == 200:
-                        media_id = resp.json().get("id")
-        except Exception as e:
-            logger.error(f"Snapshot upload failed: {e}")
+    sent = await wa.send_template(phone, template_name, parameters)
 
-        if media_id:
-            sent = await wa.send_template(phone, template_name, parameters, header_media_id=media_id)
-
-    # Fallback: template without image
+    # Fallback: plain text if template fails
     if not sent:
-        sent = await wa.send_template(phone, template_name, parameters)
-
-    # Fallback: image + caption
-    if not sent and snapshot_path and os.path.exists(snapshot_path):
-        caption = f"✅ Attendance Marked\n\nName: {staff_name}\nDate: {date_str}\nTime: {time_str}\nStatus: Present"
-        sent = await wa.send_image(phone, snapshot_path, caption)
-
-    # Final fallback: text only
-    if not sent:
-        text = f"✅ Attendance Marked\n\nName: {staff_name}\nDate: {date_str}\nTime: {time_str}\nStatus: Present"
+        text = f"Attendance Marked Successfully\n\nName: {staff_name}\nDate: {date_str}\nTime: {time_str}\nStatus: Present"
         sent = await wa.send_text(phone, text)
 
     # Log the notification

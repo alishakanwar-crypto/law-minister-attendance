@@ -168,9 +168,8 @@ async def send_image(to: str, image_path: str, caption: str = "") -> bool:
 
 
 async def send_template(to: str, template_name: str, parameters: list[str],
-                        header_media_id: str | None = None,
                         language: str = "en") -> bool:
-    """Send a template message via WhatsApp Cloud API."""
+    """Send a text-only template message via WhatsApp Cloud API."""
     token = _get_token()
     if not token:
         return False
@@ -186,11 +185,6 @@ async def send_template(to: str, template_name: str, parameters: list[str],
     }
 
     components = []
-    if header_media_id:
-        components.append({
-            "type": "header",
-            "parameters": [{"type": "image", "image": {"id": header_media_id}}],
-        })
     if parameters:
         components.append({
             "type": "body",
