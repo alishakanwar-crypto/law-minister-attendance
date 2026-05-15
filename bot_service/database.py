@@ -53,6 +53,21 @@ async def init_db():
                 FOREIGN KEY (staff_id) REFERENCES staff(id)
             );
 
+            CREATE TABLE IF NOT EXISTS face_registrations (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                phone TEXT NOT NULL,
+                name TEXT NOT NULL,
+                image_path TEXT DEFAULT '',
+                status TEXT NOT NULL DEFAULT 'pending',
+                reason TEXT DEFAULT '',
+                embedding_synced INTEGER DEFAULT 0,
+                registered_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            );
+
+            CREATE INDEX IF NOT EXISTS idx_face_reg_phone ON face_registrations(phone);
+            CREATE INDEX IF NOT EXISTS idx_face_reg_status ON face_registrations(status);
+
             CREATE TABLE IF NOT EXISTS bot_settings (
                 key TEXT PRIMARY KEY,
                 value TEXT NOT NULL
@@ -148,5 +163,148 @@ async def get_attendance_records(date_str: str = "") -> list:
             )
         rows = await cursor.fetchall()
         return [dict(row) for row in rows]
+    finally:
+        await db.close()
+
+
+# ---------- Face Registration ----------
+
+async def add_face_registration(phone: str, name: str, image_path: str = "") -> bool:
+    """Add a new face registration record."""
+    db = await get_db()
+    try:
+        await db.execute(
+            "INSERT INTO face_registrations (phone, name, image_path, status) "
+            "VALUES (?, ?, ?, 'registered')",
+            (phone, name, image_path),
+        )
+        await db.commit()
+        return True
+    except Exception as e:
+        logger.error(f"Failed to add face registration: {e}")
+        return False
+    finally:
+        await db.close()
+
+
+async def update_face_registration(phone: str, name: str, image_path: str = "") -> bool:
+    """Update an existing face registration with new image."""
+    db = await get_db()
+    try:
+        await db.execute(
+            "UPDATE face_registrations SET name = ?, image_path = ?, "
+            "status = 'registered', embedding_synced = 0, "
+            "updated_at = CURRENT_TIMESTAMP WHERE phone = ?",
+            (name, image_path, phone),
+        )
+        await db.commit()
+        return True
+    except Exception as e:
+        logger.error(f"Failed to update face registration: {e}")
+        return False
+    finally:
+        await db.close()
+
+
+async def log_face_registration(phone: str, name: str, status: str,
+                                reason: str = "", image_path: str = "") -> bool:
+    """Log a face registration attempt (including rejections)."""
+    db = await get_db()
+    try:
+        await db.execute(
+            "INSERT INTO face_registrations (phone, name, image_path, status, reason) "
+            "VALUES (?, ?, ?, ?, ?)",
+            (phone, name, image_path, status, reason),
+        )
+        await db.commit()
+        return True
+    except Exception as e:
+        logger.error(f"Failed to log face registration: {e}")
+        return False
+    finally:
+        await db.close()
+
+
+async def get_face_registration_by_phone(phone: str) -> dict | None:
+    """Get the latest face registration for a phone number."""
+    db = await get_db()
+    try:
+        cursor = await db.execute(
+            "SELECT * FROM face_registrations WHERE phone = ? AND status = 'registered' "
+            "ORDER BY updated_at DESC LIMIT 1",
+            (phone,),
+        )
+        row = await cursor.fetchone()
+        return dict(row) if row else None
+    finally:
+        await db.close()
+
+
+async def get_all_registrations(status: str = "") -> list:
+    """Get all face registrations, optionally filtered by status."""
+    db = await get_db()
+    try:
+        if status:
+            cursor = await db.execute(
+                "SELECT * FROM face_registrations WHERE status = ? ORDER BY registered_at DESC",
+                (status,),
+            )
+        else:
+            cursor = await db.execute(
+                "SELECT * FROM face_registrations ORDER BY registered_at DESC"
+            )
+        rows = await cursor.fetchall()
+        return [dict(row) for row in rows]
+    finally:
+        await db.close()
+
+
+async def get_registration_stats() -> dict:
+    """Get registration statistics."""
+    db = await get_db()
+    try:
+        cursor = await db.execute(
+            "SELECT status, COUNT(*) as count FROM face_registrations GROUP BY status"
+        )
+        rows = await cursor.fetchall()
+        stats = {row["status"]: row["count"] for row in rows}
+        return {
+            "total": sum(stats.values()),
+            "registered": stats.get("registered", 0),
+            "rejected": stats.get("rejected", 0),
+            "pending": stats.get("pending", 0),
+        }
+    finally:
+        await db.close()
+
+
+async def get_pending_sync_registrations() -> list:
+    """Get registrations that haven't been synced to the face engine."""
+    db = await get_db()
+    try:
+        cursor = await db.execute(
+            "SELECT * FROM face_registrations "
+            "WHERE status = 'registered' AND embedding_synced = 0 "
+            "ORDER BY registered_at"
+        )
+        rows = await cursor.fetchall()
+        return [dict(row) for row in rows]
+    finally:
+        await db.close()
+
+
+async def mark_registration_synced(reg_id: int) -> bool:
+    """Mark a registration as synced to the face recognition engine."""
+    db = await get_db()
+    try:
+        await db.execute(
+            "UPDATE face_registrations SET embedding_synced = 1 WHERE id = ?",
+            (reg_id,),
+        )
+        await db.commit()
+        return True
+    except Exception as e:
+        logger.error(f"Failed to mark synced: {e}")
+        return False
     finally:
         await db.close()

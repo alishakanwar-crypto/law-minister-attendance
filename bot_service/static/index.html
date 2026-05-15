@@ -73,6 +73,10 @@
                     <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4"/></svg>
                     Attendance
                 </button>
+                <button onclick="showTab('registrations')" id="tab-registrations" class="tab-btn w-full text-left px-3 py-2.5 rounded-lg text-sm font-medium flex items-center gap-2 text-gray-400 hover:bg-dark-accent/50 hover:text-white">
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5.121 17.804A13.937 13.937 0 0112 16c2.5 0 4.847.655 6.879 1.804M15 10a3 3 0 11-6 0 3 3 0 016 0zm6 2a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+                    Registrations
+                </button>
                 <button onclick="showTab('reports')" id="tab-reports" class="tab-btn w-full text-left px-3 py-2.5 rounded-lg text-sm font-medium flex items-center gap-2 text-gray-400 hover:bg-dark-accent/50 hover:text-white">
                     <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 17v-2m3 2v-4m3 4v-6m2 10H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/></svg>
                     Reports
@@ -224,6 +228,58 @@
                 </div>
             </div>
 
+            <!-- Registrations Tab -->
+            <div id="content-registrations" class="tab-content hidden fade-in">
+                <h2 class="text-2xl font-bold mb-6">Face Registrations</h2>
+                <!-- Stats -->
+                <div class="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
+                    <div class="bg-dark-card rounded-xl border border-gray-700 p-4">
+                        <p class="text-gray-400 text-xs uppercase">Total</p>
+                        <p class="text-2xl font-bold" id="reg-total">0</p>
+                    </div>
+                    <div class="bg-dark-card rounded-xl border border-gray-700 p-4">
+                        <p class="text-gray-400 text-xs uppercase">Registered</p>
+                        <p class="text-2xl font-bold text-green-400" id="reg-registered">0</p>
+                    </div>
+                    <div class="bg-dark-card rounded-xl border border-gray-700 p-4">
+                        <p class="text-gray-400 text-xs uppercase">Rejected</p>
+                        <p class="text-2xl font-bold text-red-400" id="reg-rejected">0</p>
+                    </div>
+                    <div class="bg-dark-card rounded-xl border border-gray-700 p-4">
+                        <p class="text-gray-400 text-xs uppercase">Pending Sync</p>
+                        <p class="text-2xl font-bold text-yellow-400" id="reg-pending">0</p>
+                    </div>
+                </div>
+                <!-- Registrations Table -->
+                <div class="bg-dark-card rounded-xl border border-gray-700 overflow-hidden">
+                    <div class="p-4 border-b border-gray-700 flex justify-between items-center">
+                        <h3 class="font-semibold">Registration Records</h3>
+                        <select id="reg-filter" onchange="loadRegistrations()" class="bg-dark-accent border border-gray-600 rounded-lg px-3 py-1.5 text-sm">
+                            <option value="">All</option>
+                            <option value="registered">Registered</option>
+                            <option value="rejected">Rejected</option>
+                        </select>
+                    </div>
+                    <div class="overflow-x-auto">
+                        <table class="w-full text-sm">
+                            <thead class="bg-dark-accent/50">
+                                <tr>
+                                    <th class="px-4 py-3 text-left text-gray-400 font-medium">Name</th>
+                                    <th class="px-4 py-3 text-left text-gray-400 font-medium">Phone</th>
+                                    <th class="px-4 py-3 text-left text-gray-400 font-medium">Status</th>
+                                    <th class="px-4 py-3 text-left text-gray-400 font-medium">Reason</th>
+                                    <th class="px-4 py-3 text-left text-gray-400 font-medium">Synced</th>
+                                    <th class="px-4 py-3 text-left text-gray-400 font-medium">Date</th>
+                                </tr>
+                            </thead>
+                            <tbody id="registrations-body" class="divide-y divide-gray-700">
+                                <tr><td colspan="6" class="px-4 py-8 text-center text-gray-500">No registrations yet</td></tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+
             <!-- Reports Tab -->
             <div id="content-reports" class="tab-content hidden fade-in">
                 <h2 class="text-2xl font-bold mb-6">Reports</h2>
@@ -358,6 +414,7 @@
             if (name === 'messages') loadMessages();
             if (name === 'staff') loadStaff();
             if (name === 'attendance') loadAttendance();
+            if (name === 'registrations') loadRegistrations();
         }
 
         // API Calls
@@ -504,6 +561,42 @@
                 }
             } catch (e) {
                 alert('Error: ' + e.message);
+            }
+        }
+
+        // Registrations
+        async function loadRegistrations() {
+            const filter = document.getElementById('reg-filter').value;
+            const [regsData, statsData] = await Promise.all([
+                fetchJSON(`${API}/api/registrations?status=${filter}`),
+                fetchJSON(`${API}/api/registrations/stats`),
+            ]);
+
+            if (statsData) {
+                document.getElementById('reg-total').textContent = statsData.total || 0;
+                document.getElementById('reg-registered').textContent = statsData.registered || 0;
+                document.getElementById('reg-rejected').textContent = statsData.rejected || 0;
+                document.getElementById('reg-pending').textContent = statsData.pending || 0;
+            }
+
+            const tbody = document.getElementById('registrations-body');
+            if (regsData && regsData.registrations && regsData.registrations.length > 0) {
+                tbody.innerHTML = regsData.registrations.map(r => `
+                    <tr class="hover:bg-dark-accent/30">
+                        <td class="px-4 py-3 font-medium">${r.name || ''}</td>
+                        <td class="px-4 py-3 text-gray-400">${r.phone || ''}</td>
+                        <td class="px-4 py-3">
+                            <span class="px-2 py-1 rounded text-xs ${r.status === 'registered' ? 'bg-green-500/20 text-green-400' : r.status === 'rejected' ? 'bg-red-500/20 text-red-400' : 'bg-yellow-500/20 text-yellow-400'}">${r.status}</span>
+                        </td>
+                        <td class="px-4 py-3 text-gray-500 text-xs">${r.reason || '—'}</td>
+                        <td class="px-4 py-3">
+                            <span class="text-xs ${r.embedding_synced ? 'text-green-400' : 'text-yellow-400'}">${r.embedding_synced ? 'Yes' : 'No'}</span>
+                        </td>
+                        <td class="px-4 py-3 text-gray-500 text-xs">${r.registered_at || ''}</td>
+                    </tr>
+                `).join('');
+            } else {
+                tbody.innerHTML = '<tr><td colspan="6" class="px-4 py-8 text-center text-gray-500">No registrations yet</td></tr>';
             }
         }
 

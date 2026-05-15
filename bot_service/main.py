@@ -264,6 +264,40 @@ async def download_attendance_report(date: str = Query(default="")):
     )
 
 
+# ---------- Face Registration API ----------
+
+@app.get("/api/registrations")
+async def get_registrations(status: str = Query(default="")):
+    """Get face registration records."""
+    registrations = await db.get_all_registrations(status)
+    return JSONResponse(content={"registrations": registrations, "count": len(registrations)})
+
+
+@app.get("/api/registrations/stats")
+async def get_registration_stats():
+    """Get face registration statistics."""
+    stats = await db.get_registration_stats()
+    return JSONResponse(content=stats)
+
+
+@app.get("/api/registrations/pending-sync")
+async def get_pending_sync():
+    """Get registrations that need to be synced to the face engine."""
+    pending = await db.get_pending_sync_registrations()
+    return JSONResponse(content={"pending": pending, "count": len(pending)})
+
+
+@app.post("/api/registrations/mark-synced")
+async def mark_synced(request: Request):
+    """Mark a registration as synced to the face recognition engine."""
+    data = await request.json()
+    reg_id = data.get("id")
+    if not reg_id:
+        return JSONResponse(status_code=400, content={"error": "id required"})
+    success = await db.mark_registration_synced(reg_id)
+    return JSONResponse(content={"success": success})
+
+
 # ---------- Run ----------
 
 if __name__ == "__main__":
