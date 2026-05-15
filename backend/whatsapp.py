@@ -161,11 +161,11 @@ def send_registration_rejected(cfg: dict, to: str, reason: str) -> bool:
 
 def notify_checkin(cfg: dict, staff_name: str, staff_id: str,
                    confidence: float, camera: str):
-    """Send attendance notification matching the official format.
+    """Send attendance notification using the approved text-only template.
 
-    Uses the government-office spec:
-      Attendance Marked Successfully
-      Name / Date / Time / Status: Present
+    Uses template: law_minister_attendance
+    Parameters: {{1}}=name, {{2}}=date, {{3}}=time
+    Falls back to plain text if template fails.
     """
     if not is_configured(cfg):
         return
@@ -175,18 +175,25 @@ def notify_checkin(cfg: dict, staff_name: str, staff_id: str,
     time_str = now.strftime("%I:%M %p")
     date_str = now.strftime("%d/%m/%Y")
 
-    body = msgs.attendance_notification(
-        name=staff_name,
-        date_str=date_str,
-        time_str=time_str,
-        status="Present",
+    # Try template first (bypasses 24-hour window)
+    template_sent = send_template_message(
+        cfg, recipient, "law_minister_attendance",
+        parameters=[staff_name, date_str, time_str],
     )
 
-    threading.Thread(
-        target=send_text_message,
-        args=(cfg, recipient, body),
-        daemon=True,
-    ).start()
+    # Fallback to plain text if template fails
+    if not template_sent:
+        body = msgs.attendance_notification(
+            name=staff_name,
+            date_str=date_str,
+            time_str=time_str,
+            status="Present",
+        )
+        threading.Thread(
+            target=send_text_message,
+            args=(cfg, recipient, body),
+            daemon=True,
+        ).start()
 
 
 def send_daily_summary(cfg: dict, summary: dict):
