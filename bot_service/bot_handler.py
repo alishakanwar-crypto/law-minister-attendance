@@ -8,6 +8,7 @@ from bot_service.config import ADMINS, LAW_MINISTER_PHONE_ID
 from bot_service import database as db
 from bot_service import whatsapp as wa
 from bot_service.reports import generate_summary_excel
+from bot_service.face_registration import handle_image_message
 
 logger = logging.getLogger("lm_bot.handler")
 
@@ -121,7 +122,7 @@ def _is_duplicate(msg_id: str) -> bool:
 # ---------- Admin Commands ----------
 
 ADMIN_COMMANDS = {"summary", "report", "excel", "log", "messages", "admin help",
-                  "admin", "commands", "staff", "today"}
+                  "admin", "commands", "staff", "today", "registrations", "regs"}
 
 
 async def _handle_admin_command(sender: str, text: str) -> bool:
@@ -178,6 +179,26 @@ async def _handle_admin_command(sender: str, text: str) -> bool:
             await wa.send_text(sender, "No attendance records for today yet.")
         return True
 
+    # Registrations
+    if normalised in ("registrations", "regs"):
+        stats = await db.get_registration_stats()
+        regs = await db.get_all_registrations("registered")
+        lines = [
+            f"Face Registrations:\n",
+            f"Total: {stats['total']} | Registered: {stats['registered']} | "
+            f"Rejected: {stats['rejected']}\n",
+        ]
+        if regs:
+            lines.append("Registered Users:")
+            for r in regs[:15]:
+                lines.append(f"• {r['name']} — {r['phone']}")
+            if len(regs) > 15:
+                lines.append(f"... and {len(regs) - 15} more")
+        else:
+            lines.append("No registered users yet.")
+        await wa.send_text(sender, "\n".join(lines))
+        return True
+
     # Help
     if normalised in ("admin help", "admin", "commands"):
         help_text = (
@@ -185,6 +206,7 @@ async def _handle_admin_command(sender: str, text: str) -> bool:
             "• *summary* / *report* — Excel summary of all messages (7 days)\n"
             "• *staff* — List all registered staff\n"
             "• *today* — Today's attendance records\n"
+            "• *registrations* — Face registration status\n"
             "• *admin help* — Show this menu"
         )
         await wa.send_text(sender, help_text)
@@ -203,16 +225,45 @@ async def handle_webhook(body: dict) -> dict:
         for change in entry.get("changes", []):
             value = change.get("value", {})
             for message in value.get("messages", []):
-                if message.get("type") != "text":
-                    continue
-
+                msg_type = message.get("type", "")
                 sender = message.get("from", "")
-                text = message.get("text", {}).get("body", "")
                 msg_id = message.get("id", "")
 
                 if msg_id and _is_duplicate(msg_id):
                     logger.info(f"Duplicate message {msg_id}, skipping.")
                     continue
+
+                # Handle IMAGE messages (face registration)
+                if msg_type == "image":
+                    image_info = message.get("image", {})
+                    media_id = image_info.get("id", "")
+                    caption = image_info.get("caption", "")
+                    mime_type = image_info.get("mime_type", "image/jpeg")
+
+                    await db.log_message(
+                        direction="incoming",
+                        sender=sender,
+                        recipient=LAW_MINISTER_PHONE_ID,
+                        content=f"[Image: {caption or 'no caption'}]",
+                        msg_type="image",
+                        category="face_registration",
+                    )
+
+                    if media_id:
+                        result = await handle_image_message(
+                            sender=sender,
+                            media_id=media_id,
+                            caption=caption,
+                            mime_type=mime_type,
+                        )
+                        actions.append(result)
+                    continue
+
+                # Handle TEXT messages
+                if msg_type != "text":
+                    continue
+
+                text = message.get("text", {}).get("body", "")
 
                 # Log incoming message
                 await db.log_message(
