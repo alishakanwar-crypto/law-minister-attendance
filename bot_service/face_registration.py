@@ -5,7 +5,9 @@ import logging
 import os
 from pathlib import Path
 
+import cv2
 import httpx
+import numpy as np
 from PIL import Image
 
 from bot_service.config import LAW_MINISTER_PHONE_ID, WHATSAPP_CLOUD_TOKEN
@@ -59,6 +61,11 @@ LOW_QUALITY_RESPONSE = (
     "Please send a higher quality photo/selfie.\n\n"
     "फेस रजिस्ट्रेशन हेतु छवि का रिज़ॉल्यूशन बहुत कम है। "
     "कृपया उच्च गुणवत्ता वाली फोटो/सेल्फी भेजें।"
+)
+
+NO_FACE_RESPONSE = (
+    "Inappropriate file sent. Only selfie/face photos are accepted for registration.\n\n"
+    "अनुचित फ़ाइल भेजी गई। रजिस्ट्रेशन हेतु केवल सेल्फी/फेस फोटो स्वीकार्य हैं।"
 )
 
 
@@ -143,6 +150,38 @@ def validate_image_quality(image_data: bytes) -> tuple[bool, str]:
         return False, "invalid_image"
 
 
+def detect_face(image_data: bytes) -> bool:
+    """Detect if the image contains a human face using OpenCV Haar cascade.
+
+    Returns True if at least one face is found.
+    """
+    try:
+        arr = np.frombuffer(image_data, dtype=np.uint8)
+        img = cv2.imdecode(arr, cv2.IMREAD_COLOR)
+        if img is None:
+            return False
+
+        gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
+        gray = cv2.equalizeHist(gray)
+
+        cascade_path = cv2.data.haarcascades + "haarcascade_frontalface_default.xml"
+        face_cascade = cv2.CascadeClassifier(cascade_path)
+
+        faces = face_cascade.detectMultiScale(
+            gray,
+            scaleFactor=1.1,
+            minNeighbors=4,
+            minSize=(60, 60),
+        )
+
+        found = len(faces) > 0
+        logger.info(f"Face detection: {len(faces)} face(s) found")
+        return found
+    except Exception as e:
+        logger.error(f"Face detection error: {e}")
+        return False
+
+
 # ---------- Registration Logic ----------
 
 async def handle_image_message(sender: str, media_id: str, caption: str | None,
@@ -217,6 +256,31 @@ async def handle_image_message(sender: str, media_id: str, caption: str | None,
             "type": "image",
             "status": "rejected",
             "reason": reason,
+            "response_sent": True,
+        }
+
+    # Step 3b: Detect face — reject documents, screenshots, non-face images
+    has_face = detect_face(image_data)
+    if not has_face:
+        await wa.send_text(sender, NO_FACE_RESPONSE)
+        await db.log_message(
+            direction="outgoing",
+            sender=LAW_MINISTER_PHONE_ID,
+            recipient=sender,
+            content="[Face reg: no face detected — rejected as non-face image]",
+            category="rejected_file",
+        )
+        await db.log_face_registration(
+            phone=sender,
+            name=name,
+            status="rejected",
+            reason="no_face_detected",
+        )
+        return {
+            "from": sender,
+            "type": "image",
+            "status": "rejected",
+            "reason": "no_face_detected",
             "response_sent": True,
         }
 
