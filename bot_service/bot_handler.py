@@ -259,6 +259,32 @@ async def handle_webhook(body: dict) -> dict:
                         actions.append(result)
                     continue
 
+                # Reject documents, PDFs, files, audio, video, stickers, etc.
+                if msg_type in ("document", "audio", "video", "sticker", "location", "contacts"):
+                    await wa.send_text(sender, "Inappropriate file sent.")
+                    await db.log_message(
+                        direction="incoming",
+                        sender=sender,
+                        recipient=LAW_MINISTER_PHONE_ID,
+                        content=f"[Rejected {msg_type}]",
+                        msg_type=msg_type,
+                        category="rejected_file",
+                    )
+                    await db.log_message(
+                        direction="outgoing",
+                        sender=LAW_MINISTER_PHONE_ID,
+                        recipient=sender,
+                        content="Inappropriate file sent.",
+                        category="rejected_file",
+                    )
+                    actions.append({
+                        "from": sender,
+                        "type": msg_type,
+                        "category": "rejected_file",
+                        "response_sent": True,
+                    })
+                    continue
+
                 # Handle TEXT messages
                 if msg_type != "text":
                     continue
