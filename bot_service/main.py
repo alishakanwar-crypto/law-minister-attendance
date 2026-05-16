@@ -29,6 +29,7 @@ from bot_service.config import (
 )
 from bot_service import database as db
 from bot_service import whatsapp as wa
+from bot_service import ist_time
 from bot_service.bot_handler import handle_webhook
 from bot_service.reports import generate_summary_excel, generate_attendance_excel
 
@@ -107,12 +108,22 @@ app.mount("/static", StaticFiles(directory=str(STATIC_DIR)), name="static")
 
 @app.get("/")
 async def root():
-    return {"status": "ok", "service": "law-minister-bot", "version": "2.0.0"}
+    return {
+        "status": "ok",
+        "service": "law-minister-bot",
+        "version": "2.1.0",
+        "timestamp_ist": ist_time.now_human(),
+        "timezone": "Asia/Kolkata (IST, UTC+5:30)",
+    }
 
 
 @app.get("/health")
 async def health():
-    return {"status": "healthy"}
+    return {
+        "status": "healthy",
+        "timestamp_ist": ist_time.now_human(),
+        "iso": ist_time.now_iso(),
+    }
 
 
 # ---------- Webhook ----------
@@ -155,15 +166,18 @@ async def notify_attendance(request: Request):
     {
         "staff_name": "Rahul Sharma",
         "phone": "9876543210",
-        "date": "07/05/2026",
-        "time": "09:30 AM"
+        "date": "07/05/2026",  (optional — defaults to current IST date)
+        "time": "09:30 AM IST" (optional — defaults to current IST time)
     }
     """
     data = await request.json()
     staff_name = data.get("staff_name", "")
     phone = data.get("phone", "")
-    date_str = data.get("date", "")
-    time_str = data.get("time", "")
+
+    # Always use IST — override or default
+    ts = ist_time.now_timestamp_full()
+    date_str = data.get("date", "") or ts["date"]
+    time_str = data.get("time", "") or ts["time_12h"]
 
     if not staff_name or not phone:
         return JSONResponse(status_code=400, content={"error": "staff_name and phone required"})
@@ -176,19 +190,31 @@ async def notify_attendance(request: Request):
 
     # Fallback: plain text if template fails
     if not sent:
-        text = f"Attendance Marked Successfully\n\nName: {staff_name}\nDate: {date_str}\nTime: {time_str}\nStatus: Present"
+        text = (
+            f"Attendance Marked Successfully\n\n"
+            f"Name: {staff_name}\n"
+            f"Date: {date_str}\n"
+            f"Time: {time_str}\n"
+            f"Status: Present\n\n"
+            f"Timestamp: {ts['human']}"
+        )
         sent = await wa.send_text(phone, text)
 
-    # Log the notification
+    # Log the notification with IST timestamp
     await db.log_message(
         direction="outgoing",
         sender=LAW_MINISTER_PHONE_ID,
         recipient=phone,
-        content=f"Attendance notification: {staff_name} at {time_str}",
+        content=f"Attendance notification: {staff_name} at {time_str} on {date_str}",
         category="attendance_notification",
     )
 
-    return JSONResponse(content={"sent": sent, "staff": staff_name})
+    return JSONResponse(content={
+        "sent": sent,
+        "staff": staff_name,
+        "timestamp_ist": ts["human"],
+        "iso": ts["iso"],
+    })
 
 
 @app.get("/api/messages")

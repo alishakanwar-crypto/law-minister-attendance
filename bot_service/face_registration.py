@@ -3,7 +3,6 @@
 import io
 import logging
 import os
-from datetime import datetime, timezone, timedelta
 from pathlib import Path
 
 import httpx
@@ -12,10 +11,9 @@ from PIL import Image
 from bot_service.config import LAW_MINISTER_PHONE_ID, WHATSAPP_CLOUD_TOKEN
 from bot_service import database as db
 from bot_service import whatsapp as wa
+from bot_service import ist_time
 
 logger = logging.getLogger("lm_bot.face_reg")
-
-IST = timezone(timedelta(hours=5, minutes=30))
 
 # Directory for storing face images
 FACE_IMAGES_DIR = Path(os.getenv("FACE_IMAGES_DIR", "/data/face_images"))
@@ -153,8 +151,8 @@ async def handle_image_message(sender: str, media_id: str, caption: str | None,
 
     Returns action dict with status and response sent.
     """
-    now = datetime.now(IST)
-    timestamp_str = now.strftime("%d/%m/%Y %I:%M %p IST")
+    now = ist_time.now()
+    timestamp_str = ist_time.now_human()
 
     # Step 1: Check if caption (name) is provided
     if not caption or not caption.strip():
