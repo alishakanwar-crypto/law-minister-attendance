@@ -4,6 +4,7 @@ import aiosqlite
 import logging
 
 from bot_service.config import DB_PATH
+from bot_service.ist_time import now_iso, now_date_sql
 
 logger = logging.getLogger("lm_bot.database")
 
@@ -88,13 +89,13 @@ async def init_db():
 async def log_message(direction: str, sender: str, recipient: str,
                       content: str, msg_type: str = "text",
                       category: str = ""):
-    """Log a message to the database."""
+    """Log a message to the database with IST timestamp."""
     db = await get_db()
     try:
         await db.execute(
-            "INSERT INTO message_log (direction, sender, recipient, message_type, content, category) "
-            "VALUES (?, ?, ?, ?, ?, ?)",
-            (direction, sender, recipient, msg_type, content[:500], category),
+            "INSERT INTO message_log (direction, sender, recipient, message_type, content, category, timestamp) "
+            "VALUES (?, ?, ?, ?, ?, ?, ?)",
+            (direction, sender, recipient, msg_type, content[:500], category, now_iso()),
         )
         await db.commit()
     except Exception as e:
@@ -104,12 +105,15 @@ async def log_message(direction: str, sender: str, recipient: str,
 
 
 async def get_messages(days: int = 7) -> list:
-    """Get messages from the last N days."""
+    """Get messages from the last N days (IST-aware)."""
+    from bot_service.ist_time import now, IST
+    from datetime import timedelta
+    cutoff = (now() - timedelta(days=days)).isoformat()
     db = await get_db()
     try:
         cursor = await db.execute(
-            "SELECT * FROM message_log WHERE timestamp >= datetime('now', ? || ' days') ORDER BY timestamp DESC",
-            (f"-{days}",),
+            "SELECT * FROM message_log WHERE timestamp >= ? ORDER BY timestamp DESC",
+            (cutoff,),
         )
         rows = await cursor.fetchall()
         return [dict(row) for row in rows]
@@ -170,13 +174,13 @@ async def get_attendance_records(date_str: str = "") -> list:
 # ---------- Face Registration ----------
 
 async def add_face_registration(phone: str, name: str, image_path: str = "") -> bool:
-    """Add a new face registration record."""
+    """Add a new face registration record with IST timestamp."""
     db = await get_db()
     try:
         await db.execute(
-            "INSERT INTO face_registrations (phone, name, image_path, status) "
-            "VALUES (?, ?, ?, 'registered')",
-            (phone, name, image_path),
+            "INSERT INTO face_registrations (phone, name, image_path, status, registered_at) "
+            "VALUES (?, ?, ?, 'registered', ?)",
+            (phone, name, image_path, now_iso()),
         )
         await db.commit()
         return True
@@ -188,14 +192,14 @@ async def add_face_registration(phone: str, name: str, image_path: str = "") -> 
 
 
 async def update_face_registration(phone: str, name: str, image_path: str = "") -> bool:
-    """Update an existing face registration with new image."""
+    """Update an existing face registration with new image (IST timestamp)."""
     db = await get_db()
     try:
         await db.execute(
             "UPDATE face_registrations SET name = ?, image_path = ?, "
             "status = 'registered', embedding_synced = 0, "
-            "updated_at = CURRENT_TIMESTAMP WHERE phone = ?",
-            (name, image_path, phone),
+            "updated_at = ? WHERE phone = ?",
+            (name, image_path, now_iso(), phone),
         )
         await db.commit()
         return True
@@ -208,13 +212,13 @@ async def update_face_registration(phone: str, name: str, image_path: str = "") 
 
 async def log_face_registration(phone: str, name: str, status: str,
                                 reason: str = "", image_path: str = "") -> bool:
-    """Log a face registration attempt (including rejections)."""
+    """Log a face registration attempt (including rejections) with IST timestamp."""
     db = await get_db()
     try:
         await db.execute(
-            "INSERT INTO face_registrations (phone, name, image_path, status, reason) "
-            "VALUES (?, ?, ?, ?, ?)",
-            (phone, name, image_path, status, reason),
+            "INSERT INTO face_registrations (phone, name, image_path, status, reason, registered_at) "
+            "VALUES (?, ?, ?, ?, ?, ?)",
+            (phone, name, image_path, status, reason, now_iso()),
         )
         await db.commit()
         return True
