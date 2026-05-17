@@ -226,14 +226,18 @@ async def add_face_registration(phone: str, name: str, image_path: str = "") -> 
 
 
 async def update_face_registration(phone: str, name: str, image_path: str = "") -> bool:
-    """Update an existing face registration with new image (IST timestamp)."""
+    """Update an existing face registration with new image (IST timestamp).
+
+    Filters by BOTH phone AND name so updating one person doesn't
+    corrupt other registrations from the same phone.
+    """
     db = await get_db()
     try:
         await db.execute(
-            "UPDATE face_registrations SET name = ?, image_path = ?, "
+            "UPDATE face_registrations SET image_path = ?, "
             "status = 'registered', embedding_synced = 0, "
-            "updated_at = ? WHERE phone = ?",
-            (name, image_path, now_iso(), phone),
+            "updated_at = ? WHERE phone = ? AND LOWER(TRIM(name)) = LOWER(TRIM(?))",
+            (image_path, now_iso(), phone, name),
         )
         await db.commit()
         return True
