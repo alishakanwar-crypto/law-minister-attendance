@@ -254,6 +254,29 @@ async def get_face_registration_by_phone(phone: str) -> dict | None:
         await db.close()
 
 
+async def find_registrations_by_first_name(first_name: str) -> list:
+    """Find all registered people whose first name matches (case-insensitive).
+
+    Used when someone sends a first-name-only caption to check if an
+    existing person shares that first name.
+    """
+    db = await get_db()
+    try:
+        # Match where the name starts with the given first name
+        # (e.g. "Fatima" matches "Fatima Khan", "Fatima Ahmed")
+        pattern = first_name.strip() + "%"
+        cursor = await db.execute(
+            "SELECT * FROM face_registrations "
+            "WHERE LOWER(TRIM(name)) LIKE LOWER(?) AND status = 'registered' "
+            "ORDER BY updated_at DESC",
+            (pattern,),
+        )
+        rows = await cursor.fetchall()
+        return [dict(row) for row in rows]
+    finally:
+        await db.close()
+
+
 async def get_all_registrations(status: str = "") -> list:
     """Get all face registrations, optionally filtered by status."""
     db = await get_db()
