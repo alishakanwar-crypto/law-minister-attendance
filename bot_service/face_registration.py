@@ -30,15 +30,15 @@ BLUR_THRESHOLD = 50.0  # Laplacian variance threshold
 # ---------- Response Messages ----------
 
 NO_CAPTION_RESPONSE = (
-    "Kindly resend the photo along with your name for face registration.\n\n"
-    "कृपया फेस रजिस्ट्रेशन हेतु अपने नाम के साथ फोटो दोबारा भेजें।"
+    "Kindly resend the photo along with your full name for face registration.\n\n"
+    "कृपया फेस रजिस्ट्रेशन हेतु अपने पूरे नाम के साथ फोटो दोबारा भेजें।"
 )
 
 BLURRY_IMAGE_RESPONSE = (
     "Image received is unclear or blurry. Kindly resend a clear front-facing "
-    "photo/selfie along with your name for successful face registration.\n\n"
+    "photo/selfie along with your full name for successful face registration.\n\n"
     "प्राप्त छवि अस्पष्ट या धुंधली है। कृपया सफल फेस रजिस्ट्रेशन हेतु "
-    "एक स्पष्ट फ्रंट-फेसिंग फोटो/सेल्फी अपने नाम के साथ पुनः भेजें।"
+    "एक स्पष्ट फ्रंट-फेसिंग फोटो/सेल्फी अपने पूरे नाम के साथ पुनः भेजें।"
 )
 
 REGISTRATION_SUCCESS_RESPONSE = (
@@ -304,30 +304,54 @@ async def handle_image_message(sender: str, media_id: str, caption: str | None,
             "response_sent": True,
         }
 
-    # Step 5: Register — each unique name is a separate person
-    # Only update if the EXACT same name (case-insensitive) was previously
-    # registered from the SAME phone. Otherwise create a new registration.
-    existing = await db.get_face_registration_by_phone_and_name(phone_clean, name)
+    # Step 5: Register — one person per phone number.
+    # First try exact name match, then first-name match against existing.
+    existing = await db.get_face_registration_by_phone(phone_clean)
 
     if existing:
-        # Same person re-sending photo — update their image
-        await db.update_face_registration(
-            phone=phone_clean,
-            name=name,
-            image_path=str(image_path),
+        existing_name = existing["name"].strip()
+        caption_lower = name.lower()
+        existing_lower = existing_name.lower()
+
+        # Check: exact match OR first-name-only matches existing first name
+        exact_match = caption_lower == existing_lower
+        first_name_match = (
+            existing_lower.startswith(caption_lower)
+            and len(caption_lower) < len(existing_lower)
         )
-        response = REGISTRATION_UPDATE_RESPONSE.format(
-            name=name,
-            timestamp=timestamp_str,
-        )
+
+        if exact_match or first_name_match:
+            # Same person — update with existing full name
+            use_name = existing_name if first_name_match else name
+            await db.update_face_registration(
+                phone=phone_clean,
+                name=use_name,
+                image_path=str(image_path),
+            )
+            response = REGISTRATION_UPDATE_RESPONSE.format(
+                name=use_name,
+                timestamp=timestamp_str,
+            )
+        else:
+            # Different person from same phone — overwrite registration
+            await db.update_face_registration(
+                phone=phone_clean,
+                name=name,
+                image_path=str(image_path),
+            )
+            await db.add_staff(name=name, phone=phone_clean)
+            response = REGISTRATION_SUCCESS_RESPONSE.format(
+                name=name,
+                phone=phone_clean,
+                timestamp=timestamp_str,
+            )
     else:
-        # New person — even if the phone sent other registrations before
+        # Brand new registration
         await db.add_face_registration(
             phone=phone_clean,
             name=name,
             image_path=str(image_path),
         )
-        # Also add to staff table
         await db.add_staff(name=name, phone=phone_clean)
         response = REGISTRATION_SUCCESS_RESPONSE.format(
             name=name,
