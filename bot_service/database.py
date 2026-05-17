@@ -80,6 +80,7 @@ async def init_db():
                 ('office_hours_start', '09:00'),
                 ('office_hours_end', '18:00');
         """)
+
         await db.commit()
         logger.info("Database initialized successfully")
     finally:
@@ -135,14 +136,23 @@ async def get_staff_list() -> list:
 
 
 async def add_staff(name: str, phone: str, designation: str = "") -> bool:
-    """Add a new staff member."""
+    """Add or update a staff member. One person per phone number."""
     db = await get_db()
     try:
-        await db.execute(
-            "INSERT INTO staff (name, phone, designation) VALUES (?, ?, ?) "
-            "ON CONFLICT(phone) DO UPDATE SET name=excluded.name, designation=excluded.designation, is_active=1",
-            (name, phone, designation),
+        cursor = await db.execute(
+            "SELECT id FROM staff WHERE phone = ?", (phone,)
         )
+        existing = await cursor.fetchone()
+        if existing:
+            await db.execute(
+                "UPDATE staff SET name = ?, designation = ?, is_active = 1 WHERE id = ?",
+                (name, designation, existing["id"]),
+            )
+        else:
+            await db.execute(
+                "INSERT INTO staff (name, phone, designation) VALUES (?, ?, ?)",
+                (name, phone, designation),
+            )
         await db.commit()
         return True
     except Exception as e:
@@ -192,7 +202,7 @@ async def add_face_registration(phone: str, name: str, image_path: str = "") -> 
 
 
 async def update_face_registration(phone: str, name: str, image_path: str = "") -> bool:
-    """Update an existing face registration with new image (IST timestamp)."""
+    """Update the face registration for a phone number (one person per phone)."""
     db = await get_db()
     try:
         await db.execute(
@@ -240,6 +250,29 @@ async def get_face_registration_by_phone(phone: str) -> dict | None:
         )
         row = await cursor.fetchone()
         return dict(row) if row else None
+    finally:
+        await db.close()
+
+
+async def find_registrations_by_first_name(first_name: str) -> list:
+    """Find all registered people whose first name matches (case-insensitive).
+
+    Used when someone sends a first-name-only caption to check if an
+    existing person shares that first name.
+    """
+    db = await get_db()
+    try:
+        # Match where the name starts with the given first name
+        # (e.g. "Fatima" matches "Fatima Khan", "Fatima Ahmed")
+        pattern = first_name.strip() + "%"
+        cursor = await db.execute(
+            "SELECT * FROM face_registrations "
+            "WHERE LOWER(TRIM(name)) LIKE LOWER(?) AND status = 'registered' "
+            "ORDER BY updated_at DESC",
+            (pattern,),
+        )
+        rows = await cursor.fetchall()
+        return [dict(row) for row in rows]
     finally:
         await db.close()
 
