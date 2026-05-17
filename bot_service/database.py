@@ -80,6 +80,27 @@ async def init_db():
                 ('office_hours_start', '09:00'),
                 ('office_hours_end', '18:00');
         """)
+
+        # Migration: remove UNIQUE constraint on staff.phone so multiple
+        # people can be registered from the same phone (e.g. admin registering others)
+        cursor = await db.execute("SELECT sql FROM sqlite_master WHERE type='table' AND name='staff'")
+        row = await cursor.fetchone()
+        if row and "UNIQUE" in (row[0] or ""):
+            await db.executescript("""
+                CREATE TABLE IF NOT EXISTS staff_new (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    name TEXT NOT NULL,
+                    phone TEXT NOT NULL,
+                    designation TEXT DEFAULT '',
+                    is_active INTEGER DEFAULT 1,
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                );
+                INSERT OR IGNORE INTO staff_new SELECT * FROM staff;
+                DROP TABLE staff;
+                ALTER TABLE staff_new RENAME TO staff;
+            """)
+            logger.info("Migrated staff table: removed UNIQUE constraint on phone")
+
         await db.commit()
         logger.info("Database initialized successfully")
     finally:
@@ -135,14 +156,27 @@ async def get_staff_list() -> list:
 
 
 async def add_staff(name: str, phone: str, designation: str = "") -> bool:
-    """Add a new staff member."""
+    """Add a new staff member. Multiple people can register from the same phone."""
     db = await get_db()
     try:
-        await db.execute(
-            "INSERT INTO staff (name, phone, designation) VALUES (?, ?, ?) "
-            "ON CONFLICT(phone) DO UPDATE SET name=excluded.name, designation=excluded.designation, is_active=1",
-            (name, phone, designation),
+        # Check if this exact name+phone combo already exists
+        cursor = await db.execute(
+            "SELECT id FROM staff WHERE phone = ? AND LOWER(TRIM(name)) = LOWER(TRIM(?))",
+            (phone, name),
         )
+        existing = await cursor.fetchone()
+        if existing:
+            # Same person — just reactivate if needed
+            await db.execute(
+                "UPDATE staff SET is_active = 1 WHERE id = ?",
+                (existing["id"],),
+            )
+        else:
+            # New person (possibly from same phone — e.g. admin registering others)
+            await db.execute(
+                "INSERT INTO staff (name, phone, designation) VALUES (?, ?, ?)",
+                (name, phone, designation),
+            )
         await db.commit()
         return True
     except Exception as e:
@@ -237,6 +271,26 @@ async def get_face_registration_by_phone(phone: str) -> dict | None:
             "SELECT * FROM face_registrations WHERE phone = ? AND status = 'registered' "
             "ORDER BY updated_at DESC LIMIT 1",
             (phone,),
+        )
+        row = await cursor.fetchone()
+        return dict(row) if row else None
+    finally:
+        await db.close()
+
+
+async def get_face_registration_by_phone_and_name(phone: str, name: str) -> dict | None:
+    """Get a face registration matching BOTH phone AND exact name (case-insensitive).
+
+    This prevents 'Fatima' from overwriting 'Fatima Khan' registered
+    from the same phone. Each unique name is a separate person.
+    """
+    db = await get_db()
+    try:
+        cursor = await db.execute(
+            "SELECT * FROM face_registrations WHERE phone = ? "
+            "AND LOWER(TRIM(name)) = LOWER(TRIM(?)) AND status = 'registered' "
+            "ORDER BY updated_at DESC LIMIT 1",
+            (phone, name),
         )
         row = await cursor.fetchone()
         return dict(row) if row else None

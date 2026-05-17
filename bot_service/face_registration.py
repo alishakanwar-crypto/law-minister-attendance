@@ -30,15 +30,15 @@ BLUR_THRESHOLD = 50.0  # Laplacian variance threshold
 # ---------- Response Messages ----------
 
 NO_CAPTION_RESPONSE = (
-    "Kindly resend the photo along with your full name for face registration.\n\n"
-    "कृपया फेस रजिस्ट्रेशन हेतु अपने पूरे नाम के साथ फोटो दोबारा भेजें।"
+    "Kindly resend the photo along with your name for face registration.\n\n"
+    "कृपया फेस रजिस्ट्रेशन हेतु अपने नाम के साथ फोटो दोबारा भेजें।"
 )
 
 BLURRY_IMAGE_RESPONSE = (
     "Image received is unclear or blurry. Kindly resend a clear front-facing "
-    "photo/selfie along with your full name for successful face registration.\n\n"
+    "photo/selfie along with your name for successful face registration.\n\n"
     "प्राप्त छवि अस्पष्ट या धुंधली है। कृपया सफल फेस रजिस्ट्रेशन हेतु "
-    "एक स्पष्ट फ्रंट-फेसिंग फोटो/सेल्फी अपने पूरे नाम के साथ पुनः भेजें।"
+    "एक स्पष्ट फ्रंट-फेसिंग फोटो/सेल्फी अपने नाम के साथ पुनः भेजें।"
 )
 
 REGISTRATION_SUCCESS_RESPONSE = (
@@ -304,11 +304,13 @@ async def handle_image_message(sender: str, media_id: str, caption: str | None,
             "response_sent": True,
         }
 
-    # Step 5: Check if this is new registration or update
-    existing = await db.get_face_registration_by_phone(phone_clean)
+    # Step 5: Register — each unique name is a separate person
+    # Only update if the EXACT same name (case-insensitive) was previously
+    # registered from the SAME phone. Otherwise create a new registration.
+    existing = await db.get_face_registration_by_phone_and_name(phone_clean, name)
 
     if existing:
-        # Update existing registration
+        # Same person re-sending photo — update their image
         await db.update_face_registration(
             phone=phone_clean,
             name=name,
@@ -319,7 +321,7 @@ async def handle_image_message(sender: str, media_id: str, caption: str | None,
             timestamp=timestamp_str,
         )
     else:
-        # New registration
+        # New person — even if the phone sent other registrations before
         await db.add_face_registration(
             phone=phone_clean,
             name=name,
