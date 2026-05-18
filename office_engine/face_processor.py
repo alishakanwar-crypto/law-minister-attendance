@@ -80,6 +80,7 @@ def extract_embedding(image_path: Path) -> np.ndarray | None:
         enhanced = preprocess_image(raw)
         img = Image.open(io.BytesIO(enhanced)).convert("RGB")
         img_array = np.array(img)
+        img_array = img_array[:, :, ::-1]  # RGB to BGR for InsightFace
 
         faces = app.get(img_array)
         if not faces:
@@ -103,22 +104,23 @@ def match_face(
 ) -> tuple[str | None, float]:
     """Match a face embedding against known embeddings.
 
-    Returns (name, confidence) or (None, 0.0) if no match.
+    known_embeddings is keyed by reg_id (str).
+    Returns (reg_id_key, confidence) or (None, 0.0) if no match.
     """
-    best_name = None
+    best_key = None
     best_score = 0.0
 
-    for name, data in known_embeddings.items():
+    for key, data in known_embeddings.items():
         known_emb = data["embedding"]
         if isinstance(known_emb, list):
             known_emb = np.array(known_emb, dtype=np.float32)
         score = float(np.dot(frame_embedding, known_emb))
         if score > best_score:
             best_score = score
-            best_name = name
+            best_key = key
 
     if best_score >= threshold:
-        return best_name, best_score
+        return best_key, best_score
     return None, 0.0
 
 

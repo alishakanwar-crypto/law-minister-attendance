@@ -335,6 +335,15 @@ async def download_registration_image(reg_id: int):
     if not image_path or not Path(image_path).exists():
         return JSONResponse(status_code=404, content={"error": "Image file not found"})
 
+    # Validate the path is within the expected face images directory
+    from bot_service.face_registration import FACE_IMAGES_DIR
+    try:
+        resolved = Path(image_path).resolve()
+        if not str(resolved).startswith(str(FACE_IMAGES_DIR.resolve())):
+            return JSONResponse(status_code=403, content={"error": "Access denied"})
+    except Exception:
+        return JSONResponse(status_code=403, content={"error": "Invalid path"})
+
     from fastapi.responses import FileResponse
     return FileResponse(
         image_path,

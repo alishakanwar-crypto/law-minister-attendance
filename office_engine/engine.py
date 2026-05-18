@@ -114,8 +114,10 @@ class AttendanceEngine:
                 logger.error(f"Failed to extract embedding for {name}")
                 continue
 
-            # Store embedding
-            self.known_embeddings[name] = {
+            # Store embedding keyed by reg_id (unique per registration)
+            key = str(reg_id)
+            self.known_embeddings[key] = {
+                "name": name,
                 "phone": phone,
                 "reg_id": reg_id,
                 "embedding": embedding,
@@ -147,20 +149,23 @@ class AttendanceEngine:
         # Match each detected face
         threshold = self.cfg["recognition_threshold"]
         for face_info in faces:
-            name, confidence = match_face(
+            matched_key, confidence = match_face(
                 face_info["embedding"],
                 self.known_embeddings,
                 threshold=threshold,
             )
 
-            if name is None:
+            if matched_key is None:
                 continue
 
-            if not self._is_cooled_down(name):
+            match_data = self.known_embeddings[matched_key]
+            name = match_data["name"]
+
+            if not self._is_cooled_down(matched_key):
                 continue
 
             # Attendance match found!
-            self._cooldowns[name] = time.time()
+            self._cooldowns[matched_key] = time.time()
             self._stats["matches_found"] += 1
 
             now = self._ist_now()
@@ -181,7 +186,7 @@ class AttendanceEngine:
                 logger.error(f"Snapshot save error: {e}")
 
             # Push attendance to cloud (triggers WhatsApp notification)
-            phone = self.known_embeddings[name].get("phone", "")
+            phone = match_data.get("phone", "")
             if phone:
                 await self.cloud.push_attendance(
                     staff_name=name,

@@ -109,11 +109,12 @@ class CloudSync:
     def save_embeddings(self, embeddings: dict):
         """Save face embeddings to local file.
 
-        embeddings: {name: {"phone": str, "embedding": list[float], "reg_id": int}}
+        embeddings: {reg_id: {"name": str, "phone": str, "embedding": list[float], "reg_id": int}}
         """
         serializable = {}
-        for name, data in embeddings.items():
-            serializable[name] = {
+        for key, data in embeddings.items():
+            serializable[key] = {
+                "name": data["name"],
                 "phone": data["phone"],
                 "reg_id": data.get("reg_id", 0),
                 "embedding": (
@@ -134,8 +135,9 @@ class CloudSync:
             with open(self.embeddings_file) as f:
                 data = json.load(f)
             embeddings = {}
-            for name, info in data.items():
-                embeddings[name] = {
+            for key, info in data.items():
+                embeddings[key] = {
+                    "name": info["name"],
                     "phone": info["phone"],
                     "reg_id": info.get("reg_id", 0),
                     "embedding": np.array(info["embedding"], dtype=np.float32),
