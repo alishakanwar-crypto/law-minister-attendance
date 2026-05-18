@@ -268,6 +268,27 @@ class OfficeEngineApp:
 
         self._refresh_camera_list()
 
+        # NVR IP quick setup
+        nvr_frame = self._frame(tab)
+        nvr_frame.pack(fill="x", padx=10, pady=(5, 0))
+
+        self._label(nvr_frame, "NVR IP Address:", font_size=11).pack(side="left", padx=5)
+        self.nvr_ip_entry = self._entry(nvr_frame, width=200)
+        self.nvr_ip_entry.pack(side="left", padx=5)
+        current_ip = self.cfg.get("nvr_ip", "CHANGE_THIS_IP")
+        if CTK:
+            self.nvr_ip_entry.insert(0, current_ip)
+        else:
+            self.nvr_ip_entry.insert(0, current_ip)
+        self._button(
+            nvr_frame, "Apply NVR IP", self._apply_nvr_ip, color=SUCCESS
+        ).pack(side="left", padx=5)
+
+        nvr_info = self.cfg.get("nvr_brand", "CP Plus") + " " + self.cfg.get("nvr_model", "")
+        self._label(nvr_frame, f"({nvr_info.strip()})", font_size=10, color=TEXT_DIM).pack(
+            side="left", padx=5
+        )
+
         # Camera add/edit/remove buttons
         btn_frame = self._frame(tab)
         btn_frame.pack(fill="x", padx=10, pady=5)
@@ -296,6 +317,33 @@ class OfficeEngineApp:
                 cam.get("url", ""),
                 "Yes" if cam.get("enabled", True) else "No",
             ))
+
+    def _apply_nvr_ip(self):
+        ip = self.nvr_ip_entry.get().strip()
+        if not ip or ip == "CHANGE_THIS_IP":
+            messagebox.showwarning("Enter IP", "Please enter the NVR IP address (e.g. 192.168.1.100)")
+            return
+
+        username = self.cfg.get("nvr_username", "admin")
+        password = self.cfg.get("nvr_password", "PPIS@123")
+        password_encoded = password.replace("@", "%40")
+
+        self.cfg["nvr_ip"] = ip
+        for cam in self.cfg.get("cameras", []):
+            old_url = cam.get("url", "")
+            if "CHANGE_THIS_IP" in old_url or "cam/realmonitor" in old_url:
+                channel = 1
+                if "channel=" in old_url:
+                    try:
+                        channel = int(old_url.split("channel=")[1].split("&")[0])
+                    except (ValueError, IndexError):
+                        channel = 1
+                cam["url"] = f"rtsp://{username}:{password_encoded}@{ip}:554/cam/realmonitor?channel={channel}&subtype=0"
+
+        save_config(self.cfg)
+        self._refresh_camera_list()
+        self._log(f"NVR IP updated to {ip} — all camera URLs updated")
+        messagebox.showinfo("Success", f"NVR IP set to {ip}\nAll camera URLs updated automatically.")
 
     def _add_camera_dialog(self):
         self._camera_dialog("Add Camera")
