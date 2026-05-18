@@ -32,6 +32,7 @@ except ImportError:
     CTK = False
 
 from office_engine.config import load_config, save_config, CONFIG_FILE, DEFAULT_CONFIG
+from office_engine.ddns_updater import DDNSUpdater
 from office_engine.engine import AttendanceEngine
 
 logging.basicConfig(
@@ -68,6 +69,7 @@ class OfficeEngineApp:
         self._engine_thread: threading.Thread | None = None
         self._running = False
         self._log_lines: list[str] = []
+        self._ddns: DDNSUpdater | None = None
 
         # Load or create config
         if not CONFIG_FILE.exists():
@@ -111,6 +113,7 @@ class OfficeEngineApp:
         # Tabs
         self._build_status_tab()
         self._build_cameras_tab()
+        self._build_ddns_tab()
         self._build_settings_tab()
         self._build_log_tab()
 
@@ -479,6 +482,162 @@ class OfficeEngineApp:
 
         threading.Thread(target=test, daemon=True).start()
 
+    # ── DDNS Tab ──
+
+    def _build_ddns_tab(self):
+        if CTK:
+            tab = self.notebook.add("DDNS")
+        else:
+            tab = tk.Frame(self.notebook, bg=DARK_BG)
+            self.notebook.add(tab, text="DDNS")
+
+        ddns_frame = self._frame(tab)
+        ddns_frame.pack(fill="both", expand=True, padx=10, pady=10)
+
+        self._label(ddns_frame, "Remote Access via DDNS (DuckDNS)", font_size=14, bold=True).grid(
+            row=0, column=0, columnspan=2, pady=(5, 10), sticky="w"
+        )
+
+        # Info text
+        info = (
+            "DDNS lets you access the NVR camera feed from anywhere.\n"
+            "1. Go to duckdns.org and create a free account\n"
+            "2. Create a subdomain (e.g. lawminister-office)\n"
+            "3. Copy your token and paste it below\n"
+            "4. Click Enable DDNS — your office is now accessible at:\n"
+            "   http://your-subdomain.duckdns.org"
+        )
+        self._label(ddns_frame, info, font_size=10, color=TEXT_DIM).grid(
+            row=1, column=0, columnspan=2, padx=10, pady=(0, 10), sticky="w"
+        )
+
+        # Domain field
+        self._label(ddns_frame, "DuckDNS Subdomain:", font_size=11).grid(
+            row=2, column=0, padx=10, pady=6, sticky="w"
+        )
+        domain_frame = self._frame(ddns_frame)
+        domain_frame.grid(row=2, column=1, padx=10, pady=6, sticky="w")
+        self.ddns_domain_entry = self._entry(domain_frame, width=200)
+        self.ddns_domain_entry.pack(side="left")
+        self._label(domain_frame, ".duckdns.org", font_size=11, color=TEXT_DIM).pack(side="left", padx=5)
+        domain_val = self.cfg.get("ddns_domain", "")
+        if domain_val:
+            self.ddns_domain_entry.insert(0, domain_val)
+
+        # Token field
+        self._label(ddns_frame, "DuckDNS Token:", font_size=11).grid(
+            row=3, column=0, padx=10, pady=6, sticky="w"
+        )
+        self.ddns_token_entry = self._entry(ddns_frame, width=400)
+        self.ddns_token_entry.grid(row=3, column=1, padx=10, pady=6, sticky="w")
+        token_val = self.cfg.get("ddns_token", "")
+        if token_val:
+            self.ddns_token_entry.insert(0, token_val)
+
+        # Buttons
+        btn_frame = self._frame(ddns_frame)
+        btn_frame.grid(row=4, column=0, columnspan=2, padx=10, pady=10, sticky="w")
+
+        self._button(btn_frame, "Enable DDNS", self._start_ddns, color=SUCCESS).pack(side="left", padx=5)
+        self._button(btn_frame, "Disable DDNS", self._stop_ddns, color=DANGER).pack(side="left", padx=5)
+        self._button(btn_frame, "Check Status", self._check_ddns_status, color=ACCENT).pack(side="left", padx=5)
+
+        # Status display
+        self._label(ddns_frame, "DDNS Status:", font_size=11).grid(
+            row=5, column=0, padx=10, pady=6, sticky="w"
+        )
+        self.ddns_status_var = tk.StringVar(value="Disabled")
+        self._label(ddns_frame, "", font_size=11, textvariable=self.ddns_status_var).grid(
+            row=5, column=1, padx=10, pady=6, sticky="w"
+        )
+
+        self._label(ddns_frame, "Public IP:", font_size=11).grid(
+            row=6, column=0, padx=10, pady=6, sticky="w"
+        )
+        self.ddns_ip_var = tk.StringVar(value="Unknown")
+        self._label(ddns_frame, "", font_size=11, textvariable=self.ddns_ip_var).grid(
+            row=6, column=1, padx=10, pady=6, sticky="w"
+        )
+
+        self._label(ddns_frame, "Last Updated:", font_size=11).grid(
+            row=7, column=0, padx=10, pady=6, sticky="w"
+        )
+        self.ddns_last_update_var = tk.StringVar(value="Never")
+        self._label(ddns_frame, "", font_size=11, textvariable=self.ddns_last_update_var).grid(
+            row=7, column=1, padx=10, pady=6, sticky="w"
+        )
+
+        # NVR access info
+        self._label(
+            ddns_frame,
+            "After enabling DDNS + port forwarding on the router:\n"
+            "   NVR Web:  http://your-subdomain.duckdns.org:8080\n"
+            "   RTSP:     rtsp://admin:PPIS%40123@your-subdomain.duckdns.org:554/cam/realmonitor?channel=1&subtype=0",
+            font_size=10, color=TEXT_DIM
+        ).grid(row=8, column=0, columnspan=2, padx=10, pady=(15, 5), sticky="w")
+
+        # Auto-start DDNS if it was enabled
+        if self.cfg.get("ddns_enabled") and self.cfg.get("ddns_domain") and self.cfg.get("ddns_token"):
+            self._start_ddns(auto=True)
+
+    def _start_ddns(self, auto=False):
+        domain = self.ddns_domain_entry.get().strip().replace(".duckdns.org", "")
+        token = self.ddns_token_entry.get().strip()
+
+        if not domain:
+            if not auto:
+                messagebox.showwarning("Domain Required", "Please enter your DuckDNS subdomain.")
+            return
+        if not token:
+            if not auto:
+                messagebox.showwarning("Token Required", "Please enter your DuckDNS token.")
+            return
+
+        self.cfg["ddns_enabled"] = True
+        self.cfg["ddns_domain"] = domain
+        self.cfg["ddns_token"] = token
+        save_config(self.cfg)
+
+        if self._ddns and self._ddns.is_running:
+            self._ddns.stop()
+
+        interval = self.cfg.get("ddns_interval_seconds", 300)
+        self._ddns = DDNSUpdater(domain, token, interval)
+        self._ddns.start()
+
+        self.ddns_status_var.set("Starting...")
+        self._log(f"DDNS enabled: {domain}.duckdns.org")
+
+        if not auto:
+            messagebox.showinfo("DDNS Enabled", f"DDNS updater started.\nHostname: {domain}.duckdns.org\nUpdates every {interval // 60} minutes.")
+
+        self._poll_ddns_status()
+
+    def _stop_ddns(self):
+        if self._ddns:
+            self._ddns.stop()
+        self.cfg["ddns_enabled"] = False
+        save_config(self.cfg)
+        self.ddns_status_var.set("Disabled")
+        self.ddns_ip_var.set("Unknown")
+        self.ddns_last_update_var.set("Never")
+        self._log("DDNS disabled")
+
+    def _check_ddns_status(self):
+        if self._ddns and self._ddns.is_running:
+            self.ddns_status_var.set(self._ddns.status)
+            self.ddns_ip_var.set(self._ddns.current_ip or "Detecting...")
+            self.ddns_last_update_var.set(self._ddns.last_update or "Pending...")
+        else:
+            self.ddns_status_var.set("Disabled")
+
+    def _poll_ddns_status(self):
+        if self._ddns and self._ddns.is_running:
+            self.ddns_status_var.set(self._ddns.status)
+            self.ddns_ip_var.set(self._ddns.current_ip or "Detecting...")
+            self.ddns_last_update_var.set(self._ddns.last_update or "Pending...")
+            self.root.after(5000, self._poll_ddns_status)
+
     # ── Settings Tab ──
 
     def _build_settings_tab(self):
@@ -661,8 +820,12 @@ class OfficeEngineApp:
                 "The attendance engine is running.\nStop engine and exit?",
             ):
                 self._stop_engine()
+                if self._ddns:
+                    self._ddns.stop()
                 self.root.destroy()
         else:
+            if self._ddns:
+                self._ddns.stop()
             self.root.destroy()
 
     def run(self):
