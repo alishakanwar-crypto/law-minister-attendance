@@ -4,7 +4,7 @@
   "snapshot_interval_seconds": 5,
   "recognition_threshold": 0.45,
   "cooldown_seconds": 300,
-  "attendance_start_hour": 9,
+  "attendance_start_hour": 7,
   "attendance_start_minute": 0,
   "attendance_end_hour": 18,
   "attendance_end_minute": 0,
