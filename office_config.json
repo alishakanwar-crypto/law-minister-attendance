@@ -21,9 +21,9 @@
       "enabled": true
     }
   ],
-  "ddns_enabled": false,
-  "ddns_domain": "",
-  "ddns_token": "",
+  "ddns_enabled": true,
+  "ddns_domain": "lawminister-office",
+  "ddns_token": "c6ad833e-6b19-4ef5-a86f-48d629f50b1a",
   "ddns_interval_seconds": 300,
   "face_images_dir": "face_images",
   "snapshots_dir": "attendance_snapshots",
