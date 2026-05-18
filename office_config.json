@@ -15,27 +15,9 @@
   "nvr_password": "PPIS@123",
   "cameras": [
     {
-      "name": "Channel 1",
+      "name": "Office Camera",
       "type": "rtsp",
       "url": "rtsp://admin:PPIS%40123@CHANGE_THIS_IP:554/cam/realmonitor?channel=1&subtype=0",
-      "enabled": true
-    },
-    {
-      "name": "Channel 2",
-      "type": "rtsp",
-      "url": "rtsp://admin:PPIS%40123@CHANGE_THIS_IP:554/cam/realmonitor?channel=2&subtype=0",
-      "enabled": true
-    },
-    {
-      "name": "Channel 3",
-      "type": "rtsp",
-      "url": "rtsp://admin:PPIS%40123@CHANGE_THIS_IP:554/cam/realmonitor?channel=3&subtype=0",
-      "enabled": true
-    },
-    {
-      "name": "Channel 4",
-      "type": "rtsp",
-      "url": "rtsp://admin:PPIS%40123@CHANGE_THIS_IP:554/cam/realmonitor?channel=4&subtype=0",
       "enabled": true
     }
   ],
