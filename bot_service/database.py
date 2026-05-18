@@ -330,6 +330,19 @@ async def get_pending_sync_registrations() -> list:
         await db.close()
 
 
+async def get_registration_by_id(reg_id: int) -> dict | None:
+    """Get a single face registration by its ID."""
+    db = await get_db()
+    try:
+        cursor = await db.execute(
+            "SELECT * FROM face_registrations WHERE id = ?", (reg_id,)
+        )
+        row = await cursor.fetchone()
+        return dict(row) if row else None
+    finally:
+        await db.close()
+
+
 async def mark_registration_synced(reg_id: int) -> bool:
     """Mark a registration as synced to the face recognition engine."""
     db = await get_db()
