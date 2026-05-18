@@ -70,6 +70,7 @@ class OfficeEngineApp:
         self._running = False
         self._log_lines: list[str] = []
         self._ddns: DDNSUpdater | None = None
+        self._ddns_poll_id: str | None = None
 
         # Load or create config
         if not CONFIG_FILE.exists():
@@ -580,6 +581,11 @@ class OfficeEngineApp:
         if self.cfg.get("ddns_enabled") and self.cfg.get("ddns_domain") and self.cfg.get("ddns_token"):
             self._start_ddns(auto=True)
 
+    def _cancel_ddns_poll(self):
+        if self._ddns_poll_id is not None:
+            self.root.after_cancel(self._ddns_poll_id)
+            self._ddns_poll_id = None
+
     def _start_ddns(self, auto=False):
         domain = self.ddns_domain_entry.get().strip().replace(".duckdns.org", "")
         token = self.ddns_token_entry.get().strip()
@@ -598,6 +604,8 @@ class OfficeEngineApp:
         self.cfg["ddns_token"] = token
         save_config(self.cfg)
 
+        self._cancel_ddns_poll()
+
         if self._ddns and self._ddns.is_running:
             self._ddns.stop()
 
@@ -614,6 +622,7 @@ class OfficeEngineApp:
         self._poll_ddns_status()
 
     def _stop_ddns(self):
+        self._cancel_ddns_poll()
         if self._ddns:
             self._ddns.stop()
         self.cfg["ddns_enabled"] = False
@@ -636,7 +645,9 @@ class OfficeEngineApp:
             self.ddns_status_var.set(self._ddns.status)
             self.ddns_ip_var.set(self._ddns.current_ip or "Detecting...")
             self.ddns_last_update_var.set(self._ddns.last_update or "Pending...")
-            self.root.after(5000, self._poll_ddns_status)
+            self._ddns_poll_id = self.root.after(5000, self._poll_ddns_status)
+        else:
+            self._ddns_poll_id = None
 
     # ── Settings Tab ──
 
