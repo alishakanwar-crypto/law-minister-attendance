@@ -21,6 +21,10 @@
       "enabled": true
     }
   ],
+  "ddns_enabled": false,
+  "ddns_domain": "",
+  "ddns_token": "",
+  "ddns_interval_seconds": 300,
   "face_images_dir": "face_images",
   "snapshots_dir": "attendance_snapshots",
   "embeddings_file": "face_embeddings.json",
