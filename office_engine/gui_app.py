@@ -450,15 +450,18 @@ class OfficeEngineApp:
         cam = self.cfg["cameras"][idx]
 
         import cv2
+        from office_engine.camera_reader import prepare_rtsp_url
         url = cam.get("url", "")
         if cam.get("type") == "webcam":
             url = cam.get("device_id", 0)
+        elif isinstance(url, str) and url.startswith("rtsp"):
+            url = prepare_rtsp_url(url)
 
         self._log(f"Testing camera: {cam['name']}...")
 
         def test():
             try:
-                cap = cv2.VideoCapture(url)
+                cap = cv2.VideoCapture(url, cv2.CAP_FFMPEG)
                 if cap.isOpened():
                     ret, frame = cap.read()
                     cap.release()
