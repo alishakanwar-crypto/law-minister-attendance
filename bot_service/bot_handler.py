@@ -300,24 +300,23 @@ async def handle_webhook(body: dict) -> dict:
                     category="incoming",
                 )
 
-                # Admin commands
-                if sender in ADMINS:
-                    handled = await _handle_admin_command(sender, text)
-                    if handled:
-                        await db.log_message(
-                            direction="outgoing",
-                            sender=LAW_MINISTER_PHONE_ID,
-                            recipient=sender,
-                            content=f"[Admin command: {text.strip().lower()}]",
-                            category="admin_command",
-                        )
-                        actions.append({
-                            "from": sender,
-                            "text": text,
-                            "category": "admin_command",
-                            "response_sent": True,
-                        })
-                        continue
+                # Admin commands (open to all users)
+                handled = await _handle_admin_command(sender, text)
+                if handled:
+                    await db.log_message(
+                        direction="outgoing",
+                        sender=LAW_MINISTER_PHONE_ID,
+                        recipient=sender,
+                        content=f"[Admin command: {text.strip().lower()}]",
+                        category="admin_command",
+                    )
+                    actions.append({
+                        "from": sender,
+                        "text": text,
+                        "category": "admin_command",
+                        "response_sent": True,
+                    })
+                    continue
 
                 # Auto-response
                 auto_reply = _get_auto_response(text)
