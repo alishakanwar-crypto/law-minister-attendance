@@ -60,20 +60,17 @@ def _setup_scheduler():
         today = ist_time.now_date()  # DD-MM-YYYY
         records = await db.get_attendance_records(today)
 
-        if records:
-            lines = [
-                f"📋 *Daily Attendance Summary*",
-                f"📅 Date: {today}",
-                f"✅ Total Present: {len(records)}\n",
-            ]
-            for i, r in enumerate(records, 1):
-                lines.append(f"{i}. {r['staff_name']} — {r['time']}")
-        else:
-            lines = [
-                f"📋 *Daily Attendance Summary*",
-                f"📅 Date: {today}",
-                f"\nNo attendance recorded yet today.",
-            ]
+        if not records:
+            logger.info("Daily summary: no attendance today, skipping notification")
+            return
+
+        lines = [
+            f"📋 *Daily Attendance Summary*",
+            f"📅 Date: {today}",
+            f"✅ Total Present: {len(records)}\n",
+        ]
+        for i, r in enumerate(records, 1):
+            lines.append(f"{i}. {r['staff_name']} — {r['time']}")
 
         summary_text = "\n".join(lines)
 
