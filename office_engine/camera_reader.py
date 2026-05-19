@@ -66,7 +66,10 @@ class CameraReader:
         try:
             if isinstance(source, str) and source.startswith("rtsp"):
                 source = prepare_rtsp_url(source)
-            cap = cv2.VideoCapture(source, cv2.CAP_FFMPEG)
+            if isinstance(source, str):
+                cap = cv2.VideoCapture(source, cv2.CAP_FFMPEG)
+            else:
+                cap = cv2.VideoCapture(source)
             if cap.isOpened():
                 self._captures[name] = cap
                 self._retry_at.pop(name, None)
