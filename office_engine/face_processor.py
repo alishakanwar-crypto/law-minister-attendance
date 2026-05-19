@@ -131,6 +131,7 @@ def detect_faces_in_frame(frame: np.ndarray) -> list[dict]:
     """
     app = get_insightface_app()
     if app is None:
+        logger.warning("InsightFace not available — skipping face detection")
         return []
 
     try:
@@ -145,6 +146,8 @@ def detect_faces_in_frame(frame: np.ndarray) -> list[dict]:
                 "embedding": emb,
                 "det_score": float(face.det_score),
             })
+        if results:
+            logger.info(f"Detected {len(results)} face(s) in frame")
         return results
     except Exception as e:
         logger.error(f"Face detection error: {e}")
