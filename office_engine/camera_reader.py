@@ -1,12 +1,41 @@
 """Camera reader — captures frames from RTSP / IP cameras / webcam."""
 
 import logging
+import os
+import re
 import time
+from urllib.parse import quote, unquote
 
 import cv2
 import numpy as np
 
 logger = logging.getLogger("office_engine.camera_reader")
+
+# Force FFmpeg to use TCP for RTSP (more reliable) with a 10-second timeout.
+os.environ.setdefault(
+    "OPENCV_FFMPEG_CAPTURE_OPTIONS",
+    "rtsp_transport;tcp|stimeout;10000000",
+)
+
+
+def prepare_rtsp_url(url: str) -> str:
+    """Encode special characters in the password portion of an RTSP URL.
+
+    Passwords like ``PPIS@123`` contain ``@`` which collides with the
+    ``user:pass@host`` delimiter.  This function finds the credentials,
+    decodes any existing percent-encoding, then re-encodes so that
+    FFmpeg / OpenCV can parse the URL unambiguously.
+    """
+    m = re.match(
+        r"^(rtsps?://)([^:]+):(.+)@(\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}(?::\d+)?.*)$",
+        url,
+    )
+    if not m:
+        return url
+    scheme, user, raw_pw, rest = m.group(1), m.group(2), m.group(3), m.group(4)
+    decoded_pw = unquote(raw_pw)
+    encoded_pw = quote(decoded_pw, safe="")
+    return f"{scheme}{user}:{encoded_pw}@{rest}"
 
 
 class CameraReader:
@@ -35,7 +64,9 @@ class CameraReader:
             source = url
 
         try:
-            cap = cv2.VideoCapture(source)
+            if isinstance(source, str) and source.startswith("rtsp"):
+                source = prepare_rtsp_url(source)
+            cap = cv2.VideoCapture(source, cv2.CAP_FFMPEG)
             if cap.isOpened():
                 self._captures[name] = cap
                 self._retry_at.pop(name, None)

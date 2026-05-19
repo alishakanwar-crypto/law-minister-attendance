@@ -19,6 +19,24 @@
       "type": "rtsp",
       "url": "rtsp://admin:PPIS%40123@CHANGE_THIS_IP:554/cam/realmonitor?channel=1&subtype=0",
       "enabled": true
+    },
+    {
+      "name": "Entry Gate",
+      "type": "rtsp",
+      "url": "rtsp://admin:PPIS%40123@CHANGE_THIS_IP:554/cam/realmonitor?channel=2&subtype=0",
+      "enabled": true
+    },
+    {
+      "name": "Lawn",
+      "type": "rtsp",
+      "url": "rtsp://admin:PPIS%40123@CHANGE_THIS_IP:554/cam/realmonitor?channel=3&subtype=0",
+      "enabled": true
+    },
+    {
+      "name": "Kitchen",
+      "type": "rtsp",
+      "url": "rtsp://admin:PPIS%40123@CHANGE_THIS_IP:554/cam/realmonitor?channel=4&subtype=0",
+      "enabled": true
     }
   ],
   "ddns_enabled": true,
