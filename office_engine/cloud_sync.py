@@ -106,6 +106,20 @@ class CloudSync:
             logger.error(f"Attendance push error: {e}")
             return False
 
+    async def push_logs(self, lines: list[str]) -> bool:
+        """Push log lines to the cloud for remote viewing."""
+        if not lines:
+            return True
+        try:
+            async with httpx.AsyncClient(timeout=10.0) as client:
+                resp = await client.post(
+                    f"{self.cloud_url}/api/engine-logs",
+                    json={"lines": lines},
+                )
+                return resp.status_code == 200
+        except Exception:
+            return False
+
     def save_embeddings(self, embeddings: dict):
         """Save face embeddings to local file.
 

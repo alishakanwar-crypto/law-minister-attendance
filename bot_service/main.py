@@ -15,6 +15,7 @@ Deployment: Fly.io as 'law-minister-bot' (separate from PPIS)
 
 import logging
 import os
+from collections import deque
 from contextlib import asynccontextmanager
 from datetime import datetime, timezone, timedelta
 
@@ -350,6 +351,94 @@ async def download_registration_image(reg_id: int):
         media_type="image/jpeg",
         filename=Path(image_path).name,
     )
+
+
+# ---------- Remote Engine Logs ----------
+
+_engine_log_buffer: deque[str] = deque(maxlen=500)
+
+
+@app.post("/api/engine-logs")
+async def receive_engine_logs(request: Request):
+    """Receive log lines pushed by the office engine."""
+    data = await request.json()
+    lines = data.get("lines", [])
+    for line in lines:
+        _engine_log_buffer.append(line)
+    return JSONResponse(content={"received": len(lines), "total": len(_engine_log_buffer)})
+
+
+@app.get("/api/engine-logs")
+async def get_engine_logs(limit: int = Query(default=200, ge=1, le=500)):
+    """Get recent engine log lines."""
+    logs = list(_engine_log_buffer)
+    return JSONResponse(content={"logs": logs[-limit:], "count": len(logs)})
+
+
+@app.get("/logs", response_class=HTMLResponse)
+async def logs_page():
+    """Serve a simple log viewer page."""
+    html = """
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Engine Logs — Law Minister Attendance</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <style>
+        body { font-family: monospace; background: #1a1a2e; color: #e0e0e0; margin: 0; padding: 20px; }
+        h1 { color: #00d4ff; font-size: 18px; margin-bottom: 10px; }
+        .controls { margin-bottom: 10px; }
+        .controls button { background: #00d4ff; color: #1a1a2e; border: none; padding: 8px 16px; cursor: pointer; border-radius: 4px; font-weight: bold; margin-right: 8px; }
+        .controls button:hover { background: #00b8d9; }
+        .controls label { margin-left: 16px; color: #aaa; }
+        #status { color: #aaa; font-size: 12px; margin-bottom: 8px; }
+        #log-container { background: #0d0d1a; border: 1px solid #333; border-radius: 4px; padding: 12px; height: 70vh; overflow-y: auto; white-space: pre-wrap; word-break: break-all; font-size: 13px; line-height: 1.5; }
+        .log-line { padding: 1px 0; }
+        .log-line.error { color: #ff6b6b; }
+        .log-line.warning { color: #ffd93d; }
+        .log-line.attendance { color: #6bff6b; font-weight: bold; }
+        .log-line.info { color: #e0e0e0; }
+    </style>
+</head>
+<body>
+    <h1>Office Engine Logs (Live)</h1>
+    <div class="controls">
+        <button onclick="fetchLogs()">Refresh Now</button>
+        <label><input type="checkbox" id="autoRefresh" checked> Auto-refresh (10s)</label>
+    </div>
+    <div id="status">Loading...</div>
+    <div id="log-container"></div>
+    <script>
+        const container = document.getElementById('log-container');
+        const status = document.getElementById('status');
+        let autoScroll = true;
+        container.addEventListener('scroll', () => {
+            autoScroll = container.scrollTop + container.clientHeight >= container.scrollHeight - 50;
+        });
+        function classifyLine(line) {
+            if (line.includes('ERROR')) return 'error';
+            if (line.includes('WARNING')) return 'warning';
+            if (line.includes('ATTENDANCE:')) return 'attendance';
+            return 'info';
+        }
+        async function fetchLogs() {
+            try {
+                const resp = await fetch('/api/engine-logs?limit=500');
+                const data = await resp.json();
+                container.innerHTML = data.logs.map(l => `<div class="log-line ${classifyLine(l)}">${l.replace(/</g,'&lt;')}</div>`).join('');
+                status.textContent = `${data.count} log lines — last updated: ${new Date().toLocaleTimeString()}`;
+                if (autoScroll) container.scrollTop = container.scrollHeight;
+            } catch(e) {
+                status.textContent = 'Error fetching logs: ' + e.message;
+            }
+        }
+        fetchLogs();
+        setInterval(() => { if (document.getElementById('autoRefresh').checked) fetchLogs(); }, 10000);
+    </script>
+</body>
+</html>
+"""
+    return HTMLResponse(content=html)
 
 
 @app.post("/api/registrations/reset-sync")

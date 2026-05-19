@@ -4,6 +4,7 @@ import asyncio
 import io
 import logging
 import time
+from collections import deque
 from datetime import datetime, timezone, timedelta
 from pathlib import Path
 
@@ -20,6 +21,26 @@ from office_engine.face_processor import (
 )
 
 logger = logging.getLogger("office_engine.engine")
+
+
+class CloudLogHandler(logging.Handler):
+    """Buffers log records for periodic pushing to the cloud."""
+
+    def __init__(self, maxlen: int = 500):
+        super().__init__()
+        self.buffer: deque[str] = deque(maxlen=maxlen)
+
+    def emit(self, record: logging.LogRecord):
+        try:
+            self.buffer.append(self.format(record))
+        except Exception:
+            pass
+
+    def drain(self) -> list[str]:
+        """Return and clear all buffered lines."""
+        lines = list(self.buffer)
+        self.buffer.clear()
+        return lines
 
 IST = timezone(timedelta(hours=5, minutes=30))
 
@@ -224,6 +245,15 @@ class AttendanceEngine:
         sync_interval = self.cfg["sync_interval_seconds"]
         snap_interval = self.cfg["snapshot_interval_seconds"]
         last_sync = time.time()
+        last_log_push = time.time()
+        log_push_interval = 60  # push logs to cloud every 60 seconds
+
+        # Install cloud log handler on root logger
+        cloud_handler = CloudLogHandler(maxlen=500)
+        cloud_handler.setFormatter(
+            logging.Formatter("%(asctime)s [%(levelname)s] %(name)s: %(message)s")
+        )
+        logging.getLogger().addHandler(cloud_handler)
 
         logger.info("=" * 60)
         logger.info("OFFICE ATTENDANCE ENGINE STARTED")
@@ -270,6 +300,13 @@ class AttendanceEngine:
                         f"current: {self._ist_now().strftime('%H:%M IST')}"
                     )
                     _frame_log_counter = 1  # only log once
+
+                # Periodic log push to cloud
+                if time.time() - last_log_push >= log_push_interval:
+                    lines = cloud_handler.drain()
+                    if lines:
+                        await self.cloud.push_logs(lines)
+                    last_log_push = time.time()
 
                 await asyncio.sleep(snap_interval)
 
