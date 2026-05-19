@@ -228,6 +228,9 @@ class AttendanceEngine:
         logger.info(f"Recognition threshold: {self.cfg['recognition_threshold']}")
         logger.info("=" * 60)
 
+        _frame_log_counter = 0
+        _frame_log_interval = 60  # log stats every N frames
+
         try:
             while self._running:
                 # Periodic sync
@@ -236,14 +239,31 @@ class AttendanceEngine:
                     last_sync = time.time()
 
                 # Only process during attendance window (or always if window is 0-0)
-                if self._is_in_window() or (
+                in_window = self._is_in_window() or (
                     self.cfg["attendance_start_hour"] == 0
                     and self.cfg["attendance_end_hour"] == 0
-                ):
+                )
+                if in_window:
                     # Grab frames from all cameras
                     frames = self.camera.grab_all_frames()
                     for camera_name, frame in frames:
                         await self.process_frame(camera_name, frame)
+
+                    _frame_log_counter += 1
+                    if _frame_log_counter % _frame_log_interval == 0:
+                        logger.info(
+                            f"Stats: {self._stats['frames_processed']} frames, "
+                            f"{self._stats['faces_detected']} faces detected, "
+                            f"{self._stats['matches_found']} matches"
+                        )
+                elif _frame_log_counter == 0:
+                    logger.info(
+                        f"Outside attendance window "
+                        f"({self.cfg['attendance_start_hour']:02d}:00-"
+                        f"{self.cfg['attendance_end_hour']:02d}:00 IST), "
+                        f"current: {self._ist_now().strftime('%H:%M IST')}"
+                    )
+                    _frame_log_counter = 1  # only log once
 
                 await asyncio.sleep(snap_interval)
 
