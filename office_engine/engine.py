@@ -253,7 +253,8 @@ class AttendanceEngine:
         cloud_handler.setFormatter(
             logging.Formatter("%(asctime)s [%(levelname)s] %(name)s: %(message)s")
         )
-        logging.getLogger().addHandler(cloud_handler)
+        root_logger = logging.getLogger()
+        root_logger.addHandler(cloud_handler)
 
         logger.info("=" * 60)
         logger.info("OFFICE ATTENDANCE ENGINE STARTED")
@@ -305,7 +306,10 @@ class AttendanceEngine:
                 if time.time() - last_log_push >= log_push_interval:
                     lines = cloud_handler.drain()
                     if lines:
-                        await self.cloud.push_logs(lines)
+                        success = await self.cloud.push_logs(lines)
+                        if not success:
+                            for line in lines:
+                                cloud_handler.buffer.append(line)
                     last_log_push = time.time()
 
                 await asyncio.sleep(snap_interval)
@@ -317,6 +321,7 @@ class AttendanceEngine:
         finally:
             self._running = False
             self.camera.release_all()
+            root_logger.removeHandler(cloud_handler)
             logger.info("Engine stopped")
 
     def stop(self):
