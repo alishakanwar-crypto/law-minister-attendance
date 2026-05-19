@@ -48,7 +48,7 @@ class AttendanceEngine:
         )
         self.camera = CameraReader(self.cfg.get("cameras", []))
         self.known_embeddings: dict = {}
-        self._cooldowns: dict[str, float] = {}
+        self._daily_marked: dict[str, str] = {}  # key -> date string ("YYYY-MM-DD")
         self._running = False
         self._stats = {
             "frames_processed": 0,
@@ -83,10 +83,16 @@ class AttendanceEngine:
         )
         return start <= now <= end
 
-    def _is_cooled_down(self, name: str) -> bool:
-        """Check if enough time has passed since last attendance for this person."""
-        last = self._cooldowns.get(name, 0)
-        return (time.time() - last) >= self.cfg["cooldown_seconds"]
+    def _is_already_marked_today(self, key: str) -> bool:
+        """Check if this person has already been marked present today."""
+        today = self._ist_now().strftime("%Y-%m-%d")
+        marked_date = self._daily_marked.get(key)
+        if marked_date != today:
+            # New day or never marked — clear stale entries on day change
+            if marked_date is not None and marked_date != today:
+                self._daily_marked.pop(key, None)
+            return False
+        return True
 
     async def sync_registrations(self):
         """Pull new face registrations from cloud and generate embeddings."""
@@ -161,11 +167,11 @@ class AttendanceEngine:
             match_data = self.known_embeddings[matched_key]
             name = match_data["name"]
 
-            if not self._is_cooled_down(matched_key):
+            if self._is_already_marked_today(matched_key):
                 continue
 
-            # Attendance match found!
-            self._cooldowns[matched_key] = time.time()
+            # Attendance match found — mark for today (no repeat notification)
+            self._daily_marked[matched_key] = self._ist_now().strftime("%Y-%m-%d")
             self._stats["matches_found"] += 1
 
             now = self._ist_now()
