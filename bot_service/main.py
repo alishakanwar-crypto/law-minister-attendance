@@ -27,6 +27,7 @@ from fastapi.staticfiles import StaticFiles
 
 from bot_service.config import (
     WEBHOOK_VERIFY_TOKEN, LAW_MINISTER_PHONE_ID, HOST, PORT, ADMINS,
+    DAILY_SUMMARY_RECIPIENTS,
 )
 from bot_service import database as db
 from bot_service import whatsapp as wa
@@ -46,6 +47,7 @@ logger = logging.getLogger("lm_bot.main")
 def _setup_scheduler():
     """Set up periodic tasks."""
     from apscheduler.schedulers.asyncio import AsyncIOScheduler
+    from apscheduler.triggers.cron import CronTrigger
 
     scheduler = AsyncIOScheduler()
 
@@ -53,9 +55,43 @@ def _setup_scheduler():
         result = await wa.ensure_webhook_registration()
         logger.info(f"Keep-alive registration: {result}")
 
+    async def _send_daily_summary():
+        """Send daily attendance summary to admin recipients at 10:00 AM IST."""
+        today = ist_time.now_date()  # DD-MM-YYYY
+        records = await db.get_attendance_records(today)
+
+        if records:
+            lines = [
+                f"📋 *Daily Attendance Summary*",
+                f"📅 Date: {today}",
+                f"✅ Total Present: {len(records)}\n",
+            ]
+            for i, r in enumerate(records, 1):
+                lines.append(f"{i}. {r['staff_name']} — {r['time']}")
+        else:
+            lines = [
+                f"📋 *Daily Attendance Summary*",
+                f"📅 Date: {today}",
+                f"\nNo attendance recorded yet today.",
+            ]
+
+        summary_text = "\n".join(lines)
+
+        for phone, name in DAILY_SUMMARY_RECIPIENTS.items():
+            sent = await wa.send_text(phone, summary_text)
+            logger.info(f"Daily summary to {name} ({phone}): sent={sent}")
+
     scheduler.add_job(_keep_alive, "interval", hours=2, id="lm_keep_alive")
+
+    # Daily summary at 10:00 AM IST (= 04:30 UTC)
+    scheduler.add_job(
+        _send_daily_summary,
+        CronTrigger(hour=4, minute=30, timezone="UTC"),
+        id="lm_daily_summary",
+    )
+
     scheduler.start()
-    logger.info("Scheduler started: webhook keep-alive every 2 hours")
+    logger.info("Scheduler started: webhook keep-alive (2h), daily summary (10:00 AM IST)")
     return scheduler
 
 
@@ -200,6 +236,9 @@ async def notify_attendance(request: Request):
             f"Timestamp: {ts['human']}"
         )
         sent = await wa.send_text(phone, text)
+
+    # Record attendance in the database
+    await db.record_attendance(staff_name, phone, date_str, time_str)
 
     # Log the notification with IST timestamp
     await db.log_message(

@@ -18,6 +18,11 @@ ADMINS = {
     "918796105084": "Ali",
 }
 
+# Daily summary recipients (phone -> name)
+DAILY_SUMMARY_RECIPIENTS = {
+    "919968784518": "Mr Mukesh",
+}
+
 # Server
 HOST = os.getenv("HOST", "0.0.0.0")
 PORT = int(os.getenv("PORT", "8000"))

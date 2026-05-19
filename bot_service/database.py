@@ -162,19 +162,51 @@ async def add_staff(name: str, phone: str, designation: str = "") -> bool:
         await db.close()
 
 
-async def get_attendance_records(date_str: str = "") -> list:
-    """Get attendance records for a specific date or today."""
+async def record_attendance(staff_name: str, phone: str, date_str: str, time_str: str) -> bool:
+    """Record an attendance entry in the database."""
     db = await get_db()
     try:
-        if date_str:
-            cursor = await db.execute(
-                "SELECT * FROM attendance WHERE date = ? ORDER BY time",
-                (date_str,),
-            )
+        # Upsert staff record
+        cursor = await db.execute("SELECT id FROM staff WHERE phone = ?", (phone,))
+        row = await cursor.fetchone()
+        if row:
+            staff_id = row["id"]
         else:
             cursor = await db.execute(
-                "SELECT * FROM attendance WHERE date = date('now') ORDER BY time"
+                "INSERT INTO staff (name, phone) VALUES (?, ?)",
+                (staff_name, phone),
             )
+            await db.commit()
+            staff_id = cursor.lastrowid
+
+        await db.execute(
+            "INSERT INTO attendance (staff_id, staff_name, date, time, status, notification_sent) "
+            "VALUES (?, ?, ?, ?, 'present', 1)",
+            (staff_id, staff_name, date_str, time_str),
+        )
+        await db.commit()
+        return True
+    except Exception as e:
+        logger.error(f"Failed to record attendance: {e}")
+        return False
+    finally:
+        await db.close()
+
+
+async def get_attendance_records(date_str: str = "") -> list:
+    """Get attendance records for a specific date or today (IST).
+
+    date_str format: DD-MM-YYYY (matches the format stored by notify-attendance).
+    """
+    from bot_service.ist_time import now
+    db = await get_db()
+    try:
+        if not date_str:
+            date_str = now().strftime("%d-%m-%Y")
+        cursor = await db.execute(
+            "SELECT * FROM attendance WHERE date = ? ORDER BY time",
+            (date_str,),
+        )
         rows = await cursor.fetchall()
         return [dict(row) for row in rows]
     finally:
