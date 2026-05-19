@@ -790,6 +790,24 @@ class OfficeEngineApp:
                 self._running = False
                 loop.close()
 
+        # Forward engine logs to GUI log tab
+        class _GUILogHandler(logging.Handler):
+            def __init__(self, app):
+                super().__init__()
+                self._app = app
+
+            def emit(self, record):
+                msg = record.getMessage()
+                if record.name.startswith("office_engine.") and record.name != "office_engine.gui":
+                    try:
+                        self._app.root.after(0, lambda m=msg: self._app._log(m))
+                    except Exception:
+                        pass
+
+        self._gui_handler = _GUILogHandler(self)
+        self._gui_handler.setLevel(logging.INFO)
+        logging.getLogger("office_engine").addHandler(self._gui_handler)
+
         self._engine_thread = threading.Thread(target=run_engine, daemon=True)
         self._engine_thread.start()
         self._log("Engine started")
@@ -850,6 +868,13 @@ class OfficeEngineApp:
         self._log("Application started")
         self._log(f"Cloud URL: {self.cfg['cloud_url']}")
         self._log(f"Cameras configured: {len(self.cfg.get('cameras', []))}")
+
+        # Auto-start engine if cameras are configured
+        cameras = [c for c in self.cfg.get("cameras", []) if c.get("enabled", True)]
+        if cameras:
+            self._log("Auto-starting engine...")
+            self.root.after(1000, self._start_engine)
+
         self.root.mainloop()
 
 

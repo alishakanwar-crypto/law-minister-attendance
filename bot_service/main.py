@@ -352,6 +352,21 @@ async def download_registration_image(reg_id: int):
     )
 
 
+@app.post("/api/registrations/reset-sync")
+async def reset_sync():
+    """Reset all registration sync flags so the office engine re-processes them."""
+    conn = await db.get_db()
+    try:
+        await conn.execute("UPDATE face_registrations SET embedding_synced = 0 WHERE status = 'registered'")
+        await conn.commit()
+        cursor = await conn.execute("SELECT COUNT(*) as cnt FROM face_registrations WHERE status = 'registered' AND embedding_synced = 0")
+        row = await cursor.fetchone()
+        count = row["cnt"] if row else 0
+        return JSONResponse(content={"reset": True, "pending_count": count})
+    finally:
+        await conn.close()
+
+
 # ---------- Run ----------
 
 if __name__ == "__main__":
