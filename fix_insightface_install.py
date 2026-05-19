@@ -1,6 +1,7 @@
-"""Fix insightface installation by removing C++ extension requirement."""
+"""Install insightface by copying files directly — bypasses C++ build requirement."""
 import os
 import glob
+import shutil
 import subprocess
 import sys
 
@@ -13,42 +14,53 @@ def fix_and_install():
     dirs = glob.glob(os.path.join(iftemp, "insightface-*/"))
     if not dirs:
         print("ERROR: insightface source not found in ~/Desktop/iftemp/")
-        print("Run first: py -3.12 -m pip download insightface --no-binary insightface -d %USERPROFILE%\\Desktop\\iftemp")
         return
 
     src_dir = dirs[0]
-    setup_py = os.path.join(src_dir, "setup.py")
+    src_pkg = os.path.join(src_dir, "insightface")
 
-    if not os.path.exists(setup_py):
-        print(f"ERROR: setup.py not found at {setup_py}")
+    if not os.path.isdir(src_pkg):
+        print(f"ERROR: insightface package not found at {src_pkg}")
         return
 
-    # Read setup.py and remove ext_modules
-    lines = open(setup_py).readlines()
-    new_lines = []
-    skip = False
-    bracket_depth = 0
+    # Find site-packages directory
+    site_packages = None
+    for p in sys.path:
+        if "site-packages" in p and os.path.isdir(p):
+            site_packages = p
+            break
 
-    for line in lines:
-        if "ext_modules" in line and not skip:
-            new_lines.append("    ext_modules=[],\n")
-            bracket_depth = line.count("[") - line.count("]")
-            if bracket_depth > 0:
-                skip = True
-            continue
-        if skip:
-            bracket_depth += line.count("[") - line.count("]")
-            if bracket_depth <= 0:
-                skip = False
-            continue
-        new_lines.append(line)
+    if not site_packages:
+        print("ERROR: Could not find site-packages directory")
+        return
 
-    open(setup_py, "w").writelines(new_lines)
-    print("Patched setup.py — removed C++ extension requirement")
+    # Copy insightface package directly into site-packages
+    dst_pkg = os.path.join(site_packages, "insightface")
+    if os.path.exists(dst_pkg):
+        shutil.rmtree(dst_pkg)
+    shutil.copytree(src_pkg, dst_pkg)
+    print(f"Copied insightface to {dst_pkg}")
 
-    # Install from patched source
-    print(f"Installing from {src_dir}...")
-    subprocess.run([sys.executable, "-m", "pip", "install", src_dir])
+    # Install dependencies
+    print("Installing dependencies...")
+    deps = [
+        "numpy", "onnx", "onnxruntime", "Pillow", "scipy",
+        "scikit-learn", "albumentations", "easydict", "prettytable",
+        "tqdm", "pyyaml", "cython",
+    ]
+    subprocess.run([sys.executable, "-m", "pip", "install"] + deps)
+
+    # Verify import works
+    print("\nVerifying insightface import...")
+    result = subprocess.run(
+        [sys.executable, "-c", "from insightface.app import FaceAnalysis; print('SUCCESS — insightface imported!')"],
+        capture_output=True, text=True,
+    )
+    print(result.stdout.strip())
+    if result.returncode != 0:
+        print(f"Warning: {result.stderr.strip()}")
+    else:
+        print("InsightFace installed successfully!")
 
 
 if __name__ == "__main__":
