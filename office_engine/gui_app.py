@@ -328,9 +328,10 @@ class OfficeEngineApp:
             messagebox.showwarning("Enter IP", "Please enter the NVR IP address (e.g. 192.168.1.100)")
             return
 
+        from urllib.parse import quote
         username = self.cfg.get("nvr_username", "admin")
-        password = self.cfg.get("nvr_password", "PPIS@123")
-        password_encoded = password.replace("@", "%40")
+        password = self.cfg.get("nvr_password", "Ppis#123")
+        password_encoded = quote(password, safe="")
 
         self.cfg["nvr_ip"] = ip
         for cam in self.cfg.get("cameras", []):
@@ -461,7 +462,10 @@ class OfficeEngineApp:
 
         def test():
             try:
-                cap = cv2.VideoCapture(url, cv2.CAP_FFMPEG)
+                if isinstance(url, str):
+                    cap = cv2.VideoCapture(url, cv2.CAP_FFMPEG)
+                else:
+                    cap = cv2.VideoCapture(url)
                 if cap.isOpened():
                     ret, frame = cap.read()
                     cap.release()
