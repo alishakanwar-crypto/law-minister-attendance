@@ -78,6 +78,60 @@ def _setup_scheduler():
             sent = await wa.send_text(phone, summary_text)
             logger.info(f"Daily summary to {name} ({phone}): sent={sent}")
 
+    _health_alert_sent = {"today": ""}  # track if we already alerted today
+
+    async def _check_engine_health():
+        """Check if the office engine is alive during office hours (7 AM - 6 PM IST).
+        Alert admin via WhatsApp if the engine has been offline for >10 minutes."""
+        now = ist_time.now()
+        hour = now.hour
+        today_str = now.strftime("%Y-%m-%d")
+
+        # Only check during office hours (7 AM - 6 PM IST)
+        if hour < 7 or hour >= 18:
+            return
+
+        last_seen = _engine_last_seen.get("ts")
+        offline_minutes = 0
+
+        if last_seen is None:
+            # Engine has never reported in since cloud restart
+            offline_minutes = 999
+        else:
+            delta = now - last_seen
+            offline_minutes = delta.total_seconds() / 60
+
+        if offline_minutes > 10 and _health_alert_sent["today"] != today_str:
+            # Send alert to admin + daily summary recipients
+            if last_seen:
+                last_str = last_seen.strftime("%I:%M %p IST")
+                msg = (
+                    f"⚠️ *Attendance Engine Offline*\n\n"
+                    f"The office attendance engine has not reported in for "
+                    f"{int(offline_minutes)} minutes.\n"
+                    f"Last seen: {last_str}\n\n"
+                    f"Someone at the office may need to restart the PC or "
+                    f"double-click start_hidden.vbs"
+                )
+            else:
+                msg = (
+                    f"⚠️ *Attendance Engine Offline*\n\n"
+                    f"The office attendance engine has not started today.\n\n"
+                    f"Someone at the office needs to restart the PC or "
+                    f"double-click start_hidden.vbs"
+                )
+
+            for phone, name in DAILY_SUMMARY_RECIPIENTS.items():
+                sent = await wa.send_text(phone, msg)
+                logger.warning(f"Engine offline alert to {name} ({phone}): sent={sent}")
+
+            for phone, name in ADMINS.items():
+                sent = await wa.send_text(phone, msg)
+                logger.warning(f"Engine offline alert to {name} ({phone}): sent={sent}")
+
+            _health_alert_sent["today"] = today_str
+            logger.warning(f"Engine offline alert sent (offline {int(offline_minutes)}min)")
+
     scheduler.add_job(_keep_alive, "interval", hours=2, id="lm_keep_alive")
 
     # Daily summary at 10:00 AM IST (= 04:30 UTC)
@@ -87,8 +141,16 @@ def _setup_scheduler():
         id="lm_daily_summary",
     )
 
+    # Engine health check every 5 minutes
+    scheduler.add_job(
+        _check_engine_health,
+        "interval",
+        minutes=5,
+        id="lm_engine_health",
+    )
+
     scheduler.start()
-    logger.info("Scheduler started: webhook keep-alive (2h), daily summary (10:00 AM IST)")
+    logger.info("Scheduler started: keep-alive (2h), daily summary (10 AM IST), health check (5min)")
     return scheduler
 
 
@@ -392,6 +454,28 @@ async def download_registration_image(reg_id: int):
 # ---------- Remote Engine Logs ----------
 
 _engine_log_buffer: deque[str] = deque(maxlen=500)
+_engine_last_seen: dict[str, datetime] = {}  # tracks last log push time
+
+
+@app.get("/api/engine-status")
+async def engine_status():
+    """Check whether the office engine is currently online."""
+    last_seen = _engine_last_seen.get("ts")
+    if last_seen is None:
+        return JSONResponse(content={
+            "status": "unknown",
+            "message": "Engine has never reported in since cloud restart",
+            "last_seen": None,
+        })
+    now = ist_time.now()
+    delta = now - last_seen
+    minutes_ago = int(delta.total_seconds() / 60)
+    status = "online" if minutes_ago < 5 else "offline"
+    return JSONResponse(content={
+        "status": status,
+        "last_seen": last_seen.strftime("%d-%m-%Y %I:%M %p IST"),
+        "minutes_ago": minutes_ago,
+    })
 
 
 @app.post("/api/engine-logs")
@@ -401,6 +485,7 @@ async def receive_engine_logs(request: Request):
     lines = data.get("lines", [])
     for line in lines:
         _engine_log_buffer.append(line)
+    _engine_last_seen["ts"] = ist_time.now()
     return JSONResponse(content={"received": len(lines), "total": len(_engine_log_buffer)})
 
 
