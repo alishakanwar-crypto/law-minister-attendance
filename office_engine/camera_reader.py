@@ -45,7 +45,9 @@ class CameraReader:
         self.cameras = [c for c in cameras if c.get("enabled", True)]
         self._captures: dict[str, cv2.VideoCapture] = {}
         self._retry_at: dict[str, float] = {}
-        self._retry_delay = 30  # seconds before retry after failure
+        self._retry_delay: dict[str, int] = {}
+        self._base_retry = 60  # initial retry delay (seconds)
+        self._max_retry = 600  # max retry delay (10 minutes)
 
     def connect_all(self):
         """Connect to all configured cameras."""
@@ -73,15 +75,23 @@ class CameraReader:
             if cap.isOpened():
                 self._captures[name] = cap
                 self._retry_at.pop(name, None)
+                self._retry_delay.pop(name, None)
                 logger.info(f"Connected to camera: {name}")
                 return True
             else:
-                logger.error(f"Failed to open camera: {name} ({source})")
-                self._retry_at[name] = time.time() + self._retry_delay
+                delay = self._retry_delay.get(name, self._base_retry)
+                logger.error(
+                    f"Failed to open camera: {name} ({source}) — "
+                    f"retrying in {delay}s"
+                )
+                self._retry_at[name] = time.time() + delay
+                self._retry_delay[name] = min(delay * 2, self._max_retry)
                 return False
         except Exception as e:
+            delay = self._retry_delay.get(name, self._base_retry)
             logger.error(f"Camera connection error for {name}: {e}")
-            self._retry_at[name] = time.time() + self._retry_delay
+            self._retry_at[name] = time.time() + delay
+            self._retry_delay[name] = min(delay * 2, self._max_retry)
             return False
 
     def grab_frame(self, camera_name: str) -> np.ndarray | None:
@@ -106,7 +116,7 @@ class CameraReader:
                 self._captures.pop(camera_name, None)
                 cam = next((c for c in self.cameras if c["name"] == camera_name), None)
                 if cam:
-                    self._retry_at[camera_name] = time.time() + self._retry_delay
+                    self._retry_at[camera_name] = time.time() + self._base_retry
                 return None
         except Exception as e:
             logger.error(f"Frame grab error for {camera_name}: {e}")

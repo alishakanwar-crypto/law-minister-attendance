@@ -24,19 +24,19 @@
       "name": "Entry Gate",
       "type": "rtsp",
       "url": "rtsp://admin:Ppis%23123@192.168.1.108:554/cam/realmonitor?channel=2&subtype=0",
-      "enabled": true
+      "enabled": false
     },
     {
       "name": "Lawn",
       "type": "rtsp",
       "url": "rtsp://admin:Ppis%23123@192.168.1.108:554/cam/realmonitor?channel=3&subtype=0",
-      "enabled": true
+      "enabled": false
     },
     {
       "name": "Kitchen",
       "type": "rtsp",
       "url": "rtsp://admin:Ppis%23123@192.168.1.108:554/cam/realmonitor?channel=4&subtype=0",
-      "enabled": true
+      "enabled": false
     }
   ],
   "ddns_enabled": true,

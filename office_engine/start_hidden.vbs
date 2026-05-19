@@ -3,6 +3,7 @@
 '   Win+R -> shell:startup -> paste shortcut
 '
 ' The engine runs silently in the background. Logs go to office_engine.log.
+' On each boot it pulls the latest code from git before starting.
 
 Set WshShell = CreateObject("WScript.Shell")
 Set fso = CreateObject("Scripting.FileSystemObject")
@@ -11,6 +12,6 @@ Set fso = CreateObject("Scripting.FileSystemObject")
 scriptDir = fso.GetParentFolderName(WScript.ScriptFullName)
 projectDir = fso.GetParentFolderName(scriptDir)
 
-' Run headless engine with PYTHONPATH set, completely hidden (window style 0)
+' Pull latest code, then run headless engine — completely hidden (window style 0)
 WshShell.CurrentDirectory = projectDir
-WshShell.Run "cmd /c set PYTHONPATH=" & projectDir & " && py -3.12 -m office_engine.run", 0, False
+WshShell.Run "cmd /c cd /d """ & projectDir & """ && git pull origin devin/1778828096-face-registration 2>>office_engine.log && set PYTHONPATH=" & projectDir & " && py -3.12 -m office_engine.run", 0, False
