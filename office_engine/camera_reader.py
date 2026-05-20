@@ -11,11 +11,15 @@ import numpy as np
 
 logger = logging.getLogger("office_engine.camera_reader")
 
-# Force FFmpeg to use TCP for RTSP (more reliable) with a 10-second timeout.
-os.environ.setdefault(
-    "OPENCV_FFMPEG_CAPTURE_OPTIONS",
-    "rtsp_transport;tcp|stimeout;10000000",
+# Force FFmpeg to use TCP for RTSP (more reliable) with a 15-second timeout.
+os.environ["OPENCV_FFMPEG_CAPTURE_OPTIONS"] = (
+    "rtsp_transport;tcp|stimeout;15000000"
 )
+
+
+def _strip_credentials(url: str) -> str:
+    """Remove user:pass@ from an RTSP URL (for anonymous access attempt)."""
+    return re.sub(r"^(rtsps?://)([^@]+)@", r"\1", url)
 
 
 def prepare_rtsp_url(url: str) -> str:
@@ -62,12 +66,44 @@ class CameraReader:
 
         if cam_type == "webcam":
             source = cam.get("device_id", 0)
-        else:
-            source = url
+            return self._try_open(name, source)
 
+        # For RTSP cameras, try multiple connection strategies to handle
+        # NVRs that have issues with percent-encoded passwords (#→%23).
+        if url.startswith("rtsp"):
+            strategies = [
+                ("with-creds", prepare_rtsp_url(url)),
+                ("anonymous", _strip_credentials(url)),
+            ]
+            for strategy_name, source in strategies:
+                logger.info(
+                    f"Trying camera {name} ({strategy_name})..."
+                )
+                cap = cv2.VideoCapture(source, cv2.CAP_FFMPEG)
+                if cap.isOpened():
+                    self._captures[name] = cap
+                    self._retry_at.pop(name, None)
+                    self._retry_delay.pop(name, None)
+                    logger.info(
+                        f"Connected to camera: {name} ({strategy_name})"
+                    )
+                    return True
+                cap.release()
+
+            delay = self._retry_delay.get(name, self._base_retry)
+            logger.error(
+                f"Failed to open camera: {name} — all strategies failed, "
+                f"retrying in {delay}s"
+            )
+            self._retry_at[name] = time.time() + delay
+            self._retry_delay[name] = min(delay * 2, self._max_retry)
+            return False
+
+        return self._try_open(name, url)
+
+    def _try_open(self, name: str, source) -> bool:
+        """Attempt to open a single video source."""
         try:
-            if isinstance(source, str) and source.startswith("rtsp"):
-                source = prepare_rtsp_url(source)
             if isinstance(source, str):
                 cap = cv2.VideoCapture(source, cv2.CAP_FFMPEG)
             else:
