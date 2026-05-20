@@ -1,6 +1,6 @@
 # Fly.io configuration for Law Minister Bot (standalone)
 app = "law-minister-bot"
-primary_region = "sin"
+primary_region = "bom"
 
 [build]
   dockerfile = "bot_service/Dockerfile"
