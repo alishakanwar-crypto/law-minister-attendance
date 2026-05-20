@@ -141,16 +141,18 @@ def _setup_scheduler():
         id="lm_daily_summary",
     )
 
-    # Engine health check every 5 minutes
-    scheduler.add_job(
-        _check_engine_health,
-        "interval",
-        minutes=5,
-        id="lm_engine_health",
-    )
+    # Engine health check disabled — the engine doesn't push logs yet
+    # (running old code), so the monitor fires false alarms.  Re-enable
+    # once the engine is confirmed pushing logs to the cloud.
+    # scheduler.add_job(
+    #     _check_engine_health,
+    #     "interval",
+    #     minutes=5,
+    #     id="lm_engine_health",
+    # )
 
     scheduler.start()
-    logger.info("Scheduler started: keep-alive (2h), daily summary (10 AM IST), health check (5min)")
+    logger.info("Scheduler started: keep-alive (2h), daily summary (10 AM IST)")
     return scheduler
 
 
