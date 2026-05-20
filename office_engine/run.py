@@ -18,10 +18,21 @@ from office_engine.engine import AttendanceEngine
 
 
 def setup_logging(log_file: str = ""):
-    """Configure logging to both console and file."""
-    handlers = [logging.StreamHandler(sys.stdout)]
+    """Configure logging to both console and file.
+
+    When launched via the watchdog (start_hidden.vbs), stdout is already
+    redirected to the log file by the cmd shell, so adding a FileHandler
+    for the same path causes a PermissionError on Windows.  We therefore
+    only add the FileHandler when the file can actually be opened.
+    """
+    handlers: list[logging.Handler] = [logging.StreamHandler(sys.stdout)]
     if log_file:
-        handlers.append(logging.FileHandler(log_file, encoding="utf-8"))
+        try:
+            handlers.append(logging.FileHandler(log_file, encoding="utf-8"))
+        except PermissionError:
+            # File is locked by the watchdog's cmd redirect — skip it;
+            # console output (which the watchdog captures) is sufficient.
+            pass
 
     logging.basicConfig(
         level=logging.INFO,
