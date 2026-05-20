@@ -162,8 +162,26 @@ async def add_staff(name: str, phone: str, designation: str = "") -> bool:
         await db.close()
 
 
+def _normalize_date(date_str: str) -> str:
+    """Normalize date to DD-MM-YYYY format.
+
+    Handles: DD/MM/YYYY, YYYY-MM-DD, DD-MM-YYYY.
+    """
+    if not date_str:
+        return date_str
+    # DD/MM/YYYY -> DD-MM-YYYY
+    if "/" in date_str:
+        return date_str.replace("/", "-")
+    # YYYY-MM-DD -> DD-MM-YYYY
+    parts = date_str.split("-")
+    if len(parts) == 3 and len(parts[0]) == 4:
+        return f"{parts[2]}-{parts[1]}-{parts[0]}"
+    return date_str
+
+
 async def record_attendance(staff_name: str, phone: str, date_str: str, time_str: str) -> bool:
     """Record an attendance entry in the database."""
+    date_str = _normalize_date(date_str)
     db = await get_db()
     try:
         # Upsert staff record
@@ -196,16 +214,21 @@ async def record_attendance(staff_name: str, phone: str, date_str: str, time_str
 async def get_attendance_records(date_str: str = "") -> list:
     """Get attendance records for a specific date or today (IST).
 
-    date_str format: DD-MM-YYYY (matches the format stored by notify-attendance).
+    Accepts DD-MM-YYYY, DD/MM/YYYY, or YYYY-MM-DD — all normalised to DD-MM-YYYY
+    before querying.  Also checks for the legacy DD/MM/YYYY format in case old
+    records haven't been migrated yet.
     """
     from bot_service.ist_time import now
     db = await get_db()
     try:
         if not date_str:
             date_str = now().strftime("%d-%m-%Y")
+        date_str = _normalize_date(date_str)
+        # Query both canonical (DD-MM-YYYY) and legacy (DD/MM/YYYY) formats
+        legacy = date_str.replace("-", "/")
         cursor = await db.execute(
-            "SELECT * FROM attendance WHERE date = ? ORDER BY time",
-            (date_str,),
+            "SELECT * FROM attendance WHERE date = ? OR date = ? ORDER BY time",
+            (date_str, legacy),
         )
         rows = await cursor.fetchall()
         return [dict(row) for row in rows]

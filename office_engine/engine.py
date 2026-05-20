@@ -196,7 +196,7 @@ class AttendanceEngine:
             self._stats["matches_found"] += 1
 
             now = self._ist_now()
-            date_str = now.strftime("%d/%m/%Y")
+            date_str = now.strftime("%d-%m-%Y")
             time_str = now.strftime("%I:%M %p IST")
 
             logger.info(
