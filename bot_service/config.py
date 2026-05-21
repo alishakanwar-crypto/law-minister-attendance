@@ -19,9 +19,7 @@ ADMINS = {
 }
 
 # Daily summary recipients (phone -> name)
-DAILY_SUMMARY_RECIPIENTS = {
-    "919968784518": "Mr Mukesh",
-}
+DAILY_SUMMARY_RECIPIENTS = {}
 
 # Server
 HOST = os.getenv("HOST", "0.0.0.0")
