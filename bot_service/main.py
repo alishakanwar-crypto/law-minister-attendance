@@ -192,9 +192,10 @@ app = FastAPI(
 STATIC_DIR = Path(__file__).parent / "static"
 
 
+@app.get("/", response_class=HTMLResponse)
 @app.get("/dashboard", response_class=HTMLResponse)
 async def dashboard():
-    """Serve the web-based command centre."""
+    """Serve the attendance monitoring dashboard."""
     index_file = STATIC_DIR / "index.html"
     return HTMLResponse(content=index_file.read_text())
 
@@ -204,12 +205,12 @@ app.mount("/static", StaticFiles(directory=str(STATIC_DIR)), name="static")
 
 # ---------- Health ----------
 
-@app.get("/")
+@app.get("/api/health")
 async def root():
     return {
         "status": "ok",
         "service": "law-minister-bot",
-        "version": "2.1.0",
+        "version": "3.0.0",
         "timestamp_ist": ist_time.now_human(),
         "timezone": "Asia/Kolkata (IST, UTC+5:30)",
     }
