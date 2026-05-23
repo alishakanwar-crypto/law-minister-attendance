@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Law Minister Bot — Command Centre</title>
+    <title>Law Minister Attendance — Dashboard</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <script>
         tailwind.config = {
@@ -25,214 +25,225 @@
         .fade-in { animation: fadeIn 0.3s ease-in; }
         @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
         .pulse-dot { animation: pulse 2s infinite; }
-        @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.5; } }
+        @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.3; } }
         ::-webkit-scrollbar { width: 6px; }
         ::-webkit-scrollbar-track { background: #1e293b; }
         ::-webkit-scrollbar-thumb { background: #475569; border-radius: 3px; }
+        .log-line { font-size: 12px; line-height: 1.6; font-family: 'Courier New', monospace; }
+        .log-error { color: #f87171; }
+        .log-warning { color: #fbbf24; }
+        .log-match { color: #34d399; font-weight: 600; }
+        .log-info { color: #94a3b8; }
+        @media (max-width: 768px) {
+            .sidebar { display: none; }
+            .sidebar.open { display: flex; position: fixed; z-index: 40; inset: 0; width: 100%; }
+            .mobile-nav { display: flex !important; }
+        }
     </style>
 </head>
 <body class="dark bg-dark-bg text-gray-200 min-h-screen">
     <!-- Top Navigation -->
-    <nav class="bg-navy border-b border-gray-700 px-6 py-3 flex items-center justify-between sticky top-0 z-50">
+    <nav class="bg-navy border-b border-gray-700 px-4 md:px-6 py-3 flex items-center justify-between sticky top-0 z-50">
         <div class="flex items-center gap-3">
-            <div class="w-10 h-10 bg-gold/20 rounded-lg flex items-center justify-center">
-                <span class="text-gold text-xl">&#9878;</span>
+            <button onclick="toggleSidebar()" class="md:hidden text-gray-400 hover:text-white mr-1">
+                <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16"/></svg>
+            </button>
+            <div class="w-9 h-9 bg-gold/20 rounded-lg flex items-center justify-center">
+                <span class="text-gold text-lg">&#9878;</span>
             </div>
             <div>
-                <h1 class="text-gold font-bold text-lg leading-tight">Law Minister Bot</h1>
-                <p class="text-gray-400 text-xs">Command Centre</p>
+                <h1 class="text-gold font-bold text-base md:text-lg leading-tight">Law Minister Office</h1>
+                <p class="text-gray-400 text-[10px] md:text-xs">Attendance Monitoring System</p>
             </div>
         </div>
-        <div class="flex items-center gap-4">
-            <div id="status-indicator" class="flex items-center gap-2 text-sm">
-                <span class="w-2 h-2 rounded-full bg-green-500 pulse-dot"></span>
-                <span class="text-green-400">Connected</span>
+        <div class="flex items-center gap-3 md:gap-4">
+            <div id="engine-badge" class="flex items-center gap-1.5 text-xs md:text-sm px-2.5 py-1 rounded-full bg-gray-700">
+                <span id="engine-dot" class="w-2 h-2 rounded-full bg-gray-500"></span>
+                <span id="engine-label" class="text-gray-400">Checking...</span>
             </div>
-            <span class="text-gray-500 text-xs" id="clock"></span>
+            <span class="text-gray-500 text-[10px] md:text-xs hidden sm:inline" id="clock"></span>
         </div>
     </nav>
 
     <!-- Main Layout -->
-    <div class="flex h-[calc(100vh-56px)]">
+    <div class="flex h-[calc(100vh-52px)]">
         <!-- Sidebar -->
-        <aside class="w-56 bg-dark-card border-r border-gray-700 flex flex-col">
+        <aside id="sidebar" class="sidebar w-52 bg-dark-card border-r border-gray-700 flex-col flex-shrink-0 hidden md:flex">
             <nav class="flex-1 p-3 space-y-1">
-                <button onclick="showTab('dashboard')" id="tab-dashboard" class="tab-btn w-full text-left px-3 py-2.5 rounded-lg text-sm font-medium flex items-center gap-2 bg-dark-accent text-white">
-                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2V6zm10 0a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2V6zM4 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2v-2zm10 0a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2v-2z"/></svg>
+                <button onclick="showTab('dashboard')" id="tab-dashboard" class="tab-btn w-full text-left px-3 py-2 rounded-lg text-sm font-medium flex items-center gap-2 bg-dark-accent text-white">
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-4 0a1 1 0 01-1-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 01-1 1h-2z"/></svg>
                     Dashboard
                 </button>
-                <button onclick="showTab('messages')" id="tab-messages" class="tab-btn w-full text-left px-3 py-2.5 rounded-lg text-sm font-medium flex items-center gap-2 text-gray-400 hover:bg-dark-accent/50 hover:text-white">
-                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 10h.01M12 10h.01M16 10h.01M9 16H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-5l-5 5v-5z"/></svg>
-                    Messages
-                </button>
-                <button onclick="showTab('staff')" id="tab-staff" class="tab-btn w-full text-left px-3 py-2.5 rounded-lg text-sm font-medium flex items-center gap-2 text-gray-400 hover:bg-dark-accent/50 hover:text-white">
-                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197m13.5-9a2.5 2.5 0 11-5 0 2.5 2.5 0 015 0z"/></svg>
-                    Staff
-                </button>
-                <button onclick="showTab('attendance')" id="tab-attendance" class="tab-btn w-full text-left px-3 py-2.5 rounded-lg text-sm font-medium flex items-center gap-2 text-gray-400 hover:bg-dark-accent/50 hover:text-white">
+                <button onclick="showTab('attendance')" id="tab-attendance" class="tab-btn w-full text-left px-3 py-2 rounded-lg text-sm font-medium flex items-center gap-2 text-gray-400 hover:bg-dark-accent/50 hover:text-white">
                     <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4"/></svg>
                     Attendance
                 </button>
-                <button onclick="showTab('registrations')" id="tab-registrations" class="tab-btn w-full text-left px-3 py-2.5 rounded-lg text-sm font-medium flex items-center gap-2 text-gray-400 hover:bg-dark-accent/50 hover:text-white">
-                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5.121 17.804A13.937 13.937 0 0112 16c2.5 0 4.847.655 6.879 1.804M15 10a3 3 0 11-6 0 3 3 0 016 0zm6 2a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+                <button onclick="showTab('staff')" id="tab-staff" class="tab-btn w-full text-left px-3 py-2 rounded-lg text-sm font-medium flex items-center gap-2 text-gray-400 hover:bg-dark-accent/50 hover:text-white">
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197m13.5-9a2.5 2.5 0 11-5 0 2.5 2.5 0 015 0z"/></svg>
+                    Staff
+                </button>
+                <button onclick="showTab('logs')" id="tab-logs" class="tab-btn w-full text-left px-3 py-2 rounded-lg text-sm font-medium flex items-center gap-2 text-gray-400 hover:bg-dark-accent/50 hover:text-white">
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 17v-2m3 2v-4m3 4v-6m2 10H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/></svg>
+                    Engine Logs
+                </button>
+                <button onclick="showTab('registrations')" id="tab-registrations" class="tab-btn w-full text-left px-3 py-2 rounded-lg text-sm font-medium flex items-center gap-2 text-gray-400 hover:bg-dark-accent/50 hover:text-white">
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 10l4.553-2.276A1 1 0 0121 8.618v6.764a1 1 0 01-1.447.894L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z"/></svg>
                     Registrations
                 </button>
-                <button onclick="showTab('reports')" id="tab-reports" class="tab-btn w-full text-left px-3 py-2.5 rounded-lg text-sm font-medium flex items-center gap-2 text-gray-400 hover:bg-dark-accent/50 hover:text-white">
-                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 17v-2m3 2v-4m3 4v-6m2 10H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/></svg>
+                <button onclick="showTab('messages')" id="tab-messages" class="tab-btn w-full text-left px-3 py-2 rounded-lg text-sm font-medium flex items-center gap-2 text-gray-400 hover:bg-dark-accent/50 hover:text-white">
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 10h.01M12 10h.01M16 10h.01M9 16H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-5l-5 5v-5z"/></svg>
+                    Messages
+                </button>
+                <button onclick="showTab('reports')" id="tab-reports" class="tab-btn w-full text-left px-3 py-2 rounded-lg text-sm font-medium flex items-center gap-2 text-gray-400 hover:bg-dark-accent/50 hover:text-white">
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/></svg>
                     Reports
                 </button>
-                <button onclick="showTab('settings')" id="tab-settings" class="tab-btn w-full text-left px-3 py-2.5 rounded-lg text-sm font-medium flex items-center gap-2 text-gray-400 hover:bg-dark-accent/50 hover:text-white">
+                <button onclick="showTab('settings')" id="tab-settings" class="tab-btn w-full text-left px-3 py-2 rounded-lg text-sm font-medium flex items-center gap-2 text-gray-400 hover:bg-dark-accent/50 hover:text-white">
                     <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.066 2.573c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.573 1.066c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.066-2.573c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"/><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/></svg>
                     Settings
                 </button>
             </nav>
-            <div class="p-3 border-t border-gray-700">
-                <div class="text-xs text-gray-500 text-center">
-                    Admin: Ali (918796105084)
-                </div>
+            <div class="p-3 border-t border-gray-700 text-xs text-gray-500 text-center">
+                v3.0 — Powered by AI
             </div>
         </aside>
 
         <!-- Content Area -->
-        <main class="flex-1 overflow-y-auto p-6">
-            <!-- Dashboard Tab -->
+        <main class="flex-1 overflow-y-auto p-4 md:p-6">
+
+            <!-- ====== DASHBOARD TAB ====== -->
             <div id="content-dashboard" class="tab-content fade-in">
-                <h2 class="text-2xl font-bold mb-6">Dashboard</h2>
+                <!-- Engine Status Banner -->
+                <div id="engine-banner" class="mb-5 rounded-xl p-4 border border-gray-700 bg-dark-card">
+                    <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                        <div class="flex items-center gap-3">
+                            <div id="engine-icon" class="w-12 h-12 rounded-xl flex items-center justify-center bg-gray-700">
+                                <svg class="w-6 h-6 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9.75 17L9 20l-1 1h8l-1-1-.75-3M3 13h18M5 17h14a2 2 0 002-2V5a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z"/></svg>
+                            </div>
+                            <div>
+                                <h3 class="font-semibold text-base" id="engine-title">Office Engine</h3>
+                                <p class="text-xs text-gray-400" id="engine-subtitle">Checking status...</p>
+                            </div>
+                        </div>
+                        <div class="text-right text-xs text-gray-400" id="engine-details"></div>
+                    </div>
+                </div>
+
                 <!-- Stats Cards -->
-                <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
-                    <div class="bg-dark-card rounded-xl p-5 border border-gray-700">
-                        <div class="flex items-center justify-between">
-                            <div>
-                                <p class="text-gray-400 text-sm">Messages Today</p>
-                                <p class="text-3xl font-bold mt-1" id="stat-messages">-</p>
-                            </div>
-                            <div class="w-12 h-12 bg-blue-500/20 rounded-lg flex items-center justify-center">
-                                <svg class="w-6 h-6 text-blue-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 10h.01M12 10h.01M16 10h.01M9 16H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-5l-5 5v-5z"/></svg>
-                            </div>
-                        </div>
+                <div class="grid grid-cols-2 lg:grid-cols-4 gap-3 md:gap-4 mb-5">
+                    <div class="bg-dark-card rounded-xl p-4 border border-gray-700">
+                        <p class="text-gray-400 text-xs">Present Today</p>
+                        <p class="text-2xl md:text-3xl font-bold mt-1 text-green-400" id="stat-attendance">-</p>
                     </div>
-                    <div class="bg-dark-card rounded-xl p-5 border border-gray-700">
-                        <div class="flex items-center justify-between">
-                            <div>
-                                <p class="text-gray-400 text-sm">Staff Members</p>
-                                <p class="text-3xl font-bold mt-1" id="stat-staff">-</p>
-                            </div>
-                            <div class="w-12 h-12 bg-green-500/20 rounded-lg flex items-center justify-center">
-                                <svg class="w-6 h-6 text-green-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0z"/></svg>
-                            </div>
-                        </div>
+                    <div class="bg-dark-card rounded-xl p-4 border border-gray-700">
+                        <p class="text-gray-400 text-xs">Registered Staff</p>
+                        <p class="text-2xl md:text-3xl font-bold mt-1" id="stat-staff">-</p>
                     </div>
-                    <div class="bg-dark-card rounded-xl p-5 border border-gray-700">
-                        <div class="flex items-center justify-between">
-                            <div>
-                                <p class="text-gray-400 text-sm">Today's Attendance</p>
-                                <p class="text-3xl font-bold mt-1" id="stat-attendance">-</p>
-                            </div>
-                            <div class="w-12 h-12 bg-purple-500/20 rounded-lg flex items-center justify-center">
-                                <svg class="w-6 h-6 text-purple-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4"/></svg>
-                            </div>
-                        </div>
+                    <div class="bg-dark-card rounded-xl p-4 border border-gray-700">
+                        <p class="text-gray-400 text-xs">Faces Detected</p>
+                        <p class="text-2xl md:text-3xl font-bold mt-1 text-blue-400" id="stat-faces">-</p>
                     </div>
-                    <div class="bg-dark-card rounded-xl p-5 border border-gray-700">
-                        <div class="flex items-center justify-between">
-                            <div>
-                                <p class="text-gray-400 text-sm">Bot Status</p>
-                                <p class="text-lg font-bold mt-1 text-green-400" id="stat-status">Active</p>
-                            </div>
-                            <div class="w-12 h-12 bg-gold/20 rounded-lg flex items-center justify-center">
-                                <svg class="w-6 h-6 text-gold" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"/></svg>
-                            </div>
-                        </div>
+                    <div class="bg-dark-card rounded-xl p-4 border border-gray-700">
+                        <p class="text-gray-400 text-xs">Frames Processed</p>
+                        <p class="text-2xl md:text-3xl font-bold mt-1 text-purple-400" id="stat-frames">-</p>
                     </div>
                 </div>
 
-                <!-- Recent Messages -->
-                <div class="bg-dark-card rounded-xl border border-gray-700 p-5">
-                    <h3 class="text-lg font-semibold mb-4">Recent Messages</h3>
-                    <div id="recent-messages" class="space-y-3 max-h-96 overflow-y-auto">
-                        <p class="text-gray-500 text-sm">Loading...</p>
+                <!-- Today's Attendance -->
+                <div class="bg-dark-card rounded-xl border border-gray-700 mb-5">
+                    <div class="flex items-center justify-between p-4 border-b border-gray-700">
+                        <h3 class="font-semibold">Today's Attendance</h3>
+                        <button onclick="loadDashboard()" class="text-xs text-blue-400 hover:text-blue-300">Refresh</button>
+                    </div>
+                    <div id="today-attendance" class="p-4">
+                        <p class="text-gray-500 text-sm text-center py-4">Loading...</p>
+                    </div>
+                </div>
+
+                <!-- Recent Engine Activity -->
+                <div class="bg-dark-card rounded-xl border border-gray-700">
+                    <div class="flex items-center justify-between p-4 border-b border-gray-700">
+                        <h3 class="font-semibold">Recent Engine Activity</h3>
+                        <span class="text-xs text-gray-500">Last 10 key events</span>
+                    </div>
+                    <div id="recent-activity" class="p-4 max-h-64 overflow-y-auto">
+                        <p class="text-gray-500 text-sm text-center py-4">Loading...</p>
                     </div>
                 </div>
             </div>
 
-            <!-- Messages Tab -->
-            <div id="content-messages" class="tab-content hidden fade-in">
-                <div class="flex items-center justify-between mb-6">
-                    <h2 class="text-2xl font-bold">Messages</h2>
-                    <div class="flex gap-2">
-                        <select id="msg-days" class="bg-dark-card border border-gray-600 rounded-lg px-3 py-2 text-sm" onchange="loadMessages()">
-                            <option value="1">Last 24 hours</option>
-                            <option value="7" selected>Last 7 days</option>
-                            <option value="30">Last 30 days</option>
-                        </select>
-                        <button onclick="loadMessages()" class="bg-blue-600 hover:bg-blue-700 px-4 py-2 rounded-lg text-sm font-medium">Refresh</button>
-                    </div>
-                </div>
-                <div class="bg-dark-card rounded-xl border border-gray-700 overflow-hidden">
-                    <table class="w-full text-sm">
-                        <thead class="bg-dark-accent">
-                            <tr>
-                                <th class="px-4 py-3 text-left text-gray-400 font-medium">Direction</th>
-                                <th class="px-4 py-3 text-left text-gray-400 font-medium">From</th>
-                                <th class="px-4 py-3 text-left text-gray-400 font-medium">To</th>
-                                <th class="px-4 py-3 text-left text-gray-400 font-medium">Content</th>
-                                <th class="px-4 py-3 text-left text-gray-400 font-medium">Category</th>
-                                <th class="px-4 py-3 text-left text-gray-400 font-medium">Time</th>
-                            </tr>
-                        </thead>
-                        <tbody id="messages-table" class="divide-y divide-gray-700">
-                            <tr><td colspan="6" class="px-4 py-8 text-center text-gray-500">Loading...</td></tr>
-                        </tbody>
-                    </table>
-                </div>
-            </div>
-
-            <!-- Staff Tab -->
-            <div id="content-staff" class="tab-content hidden fade-in">
-                <div class="flex items-center justify-between mb-6">
-                    <h2 class="text-2xl font-bold">Staff Management</h2>
-                    <button onclick="showAddStaffModal()" class="bg-green-600 hover:bg-green-700 px-4 py-2 rounded-lg text-sm font-medium flex items-center gap-2">
-                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/></svg>
-                        Add Staff
-                    </button>
-                </div>
-                <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4" id="staff-grid">
-                    <p class="text-gray-500 text-sm col-span-3 text-center py-8">Loading...</p>
-                </div>
-            </div>
-
-            <!-- Attendance Tab -->
+            <!-- ====== ATTENDANCE TAB ====== -->
             <div id="content-attendance" class="tab-content hidden fade-in">
-                <div class="flex items-center justify-between mb-6">
-                    <h2 class="text-2xl font-bold">Attendance</h2>
+                <div class="flex flex-col sm:flex-row items-start sm:items-center justify-between mb-5 gap-3">
+                    <h2 class="text-xl font-bold">Attendance Records</h2>
                     <div class="flex gap-2">
                         <input type="date" id="att-date" class="bg-dark-card border border-gray-600 rounded-lg px-3 py-2 text-sm" onchange="loadAttendance()">
                         <button onclick="loadAttendance()" class="bg-blue-600 hover:bg-blue-700 px-4 py-2 rounded-lg text-sm font-medium">Refresh</button>
                     </div>
                 </div>
                 <div class="bg-dark-card rounded-xl border border-gray-700 overflow-hidden">
-                    <table class="w-full text-sm">
-                        <thead class="bg-dark-accent">
-                            <tr>
-                                <th class="px-4 py-3 text-left text-gray-400 font-medium">#</th>
-                                <th class="px-4 py-3 text-left text-gray-400 font-medium">Staff Name</th>
-                                <th class="px-4 py-3 text-left text-gray-400 font-medium">Date</th>
-                                <th class="px-4 py-3 text-left text-gray-400 font-medium">Time</th>
-                                <th class="px-4 py-3 text-left text-gray-400 font-medium">Status</th>
-                            </tr>
-                        </thead>
-                        <tbody id="attendance-table" class="divide-y divide-gray-700">
-                            <tr><td colspan="5" class="px-4 py-8 text-center text-gray-500">Loading...</td></tr>
-                        </tbody>
-                    </table>
+                    <div class="overflow-x-auto">
+                        <table class="w-full text-sm">
+                            <thead class="bg-dark-accent">
+                                <tr>
+                                    <th class="px-4 py-3 text-left text-gray-400 font-medium">#</th>
+                                    <th class="px-4 py-3 text-left text-gray-400 font-medium">Staff Name</th>
+                                    <th class="px-4 py-3 text-left text-gray-400 font-medium">Date</th>
+                                    <th class="px-4 py-3 text-left text-gray-400 font-medium">Time</th>
+                                    <th class="px-4 py-3 text-left text-gray-400 font-medium">Status</th>
+                                    <th class="px-4 py-3 text-left text-gray-400 font-medium">Notified</th>
+                                </tr>
+                            </thead>
+                            <tbody id="attendance-table" class="divide-y divide-gray-700">
+                                <tr><td colspan="6" class="px-4 py-8 text-center text-gray-500">Loading...</td></tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+                <div class="mt-4 text-sm text-gray-500" id="attendance-summary"></div>
+            </div>
+
+            <!-- ====== STAFF TAB ====== -->
+            <div id="content-staff" class="tab-content hidden fade-in">
+                <div class="flex items-center justify-between mb-5">
+                    <h2 class="text-xl font-bold">Registered Staff</h2>
+                    <button onclick="showAddStaffModal()" class="bg-green-600 hover:bg-green-700 px-4 py-2 rounded-lg text-sm font-medium flex items-center gap-2">
+                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/></svg>
+                        Add Staff
+                    </button>
+                </div>
+                <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4" id="staff-grid">
+                    <p class="text-gray-500 text-sm col-span-3 text-center py-8">Loading...</p>
                 </div>
             </div>
 
-            <!-- Registrations Tab -->
+            <!-- ====== ENGINE LOGS TAB ====== -->
+            <div id="content-logs" class="tab-content hidden fade-in">
+                <div class="flex flex-col sm:flex-row items-start sm:items-center justify-between mb-5 gap-3">
+                    <h2 class="text-xl font-bold">Engine Logs</h2>
+                    <div class="flex items-center gap-3">
+                        <label class="flex items-center gap-1.5 text-sm text-gray-400 cursor-pointer">
+                            <input type="checkbox" id="autoRefreshLogs" checked class="rounded"> Auto-refresh
+                        </label>
+                        <select id="log-filter" class="bg-dark-card border border-gray-600 rounded-lg px-3 py-1.5 text-sm" onchange="renderLogs()">
+                            <option value="all">All Logs</option>
+                            <option value="key">Key Events Only</option>
+                            <option value="errors">Errors & Warnings</option>
+                            <option value="attendance">Attendance Only</option>
+                        </select>
+                        <button onclick="fetchLogs()" class="bg-blue-600 hover:bg-blue-700 px-4 py-2 rounded-lg text-sm font-medium">Refresh</button>
+                    </div>
+                </div>
+                <div id="log-status" class="text-xs text-gray-500 mb-2">Loading...</div>
+                <div id="log-container" class="bg-[#0d0d1a] rounded-xl border border-gray-700 p-4 h-[calc(100vh-200px)] overflow-y-auto">
+                    <p class="text-gray-500 text-sm text-center py-8">Loading logs...</p>
+                </div>
+            </div>
+
+            <!-- ====== REGISTRATIONS TAB ====== -->
             <div id="content-registrations" class="tab-content hidden fade-in">
-                <h2 class="text-2xl font-bold mb-6">Face Registrations</h2>
-                <!-- Stats -->
-                <div class="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
+                <h2 class="text-xl font-bold mb-5">Face Registrations</h2>
+                <div class="grid grid-cols-2 lg:grid-cols-4 gap-3 mb-5">
                     <div class="bg-dark-card rounded-xl border border-gray-700 p-4">
                         <p class="text-gray-400 text-xs uppercase">Total</p>
                         <p class="text-2xl font-bold" id="reg-total">0</p>
@@ -250,7 +261,6 @@
                         <p class="text-2xl font-bold text-yellow-400" id="reg-pending">0</p>
                     </div>
                 </div>
-                <!-- Registrations Table -->
                 <div class="bg-dark-card rounded-xl border border-gray-700 overflow-hidden">
                     <div class="p-4 border-b border-gray-700 flex justify-between items-center">
                         <h3 class="font-semibold">Registration Records</h3>
@@ -273,23 +283,68 @@
                                 </tr>
                             </thead>
                             <tbody id="registrations-body" class="divide-y divide-gray-700">
-                                <tr><td colspan="6" class="px-4 py-8 text-center text-gray-500">No registrations yet</td></tr>
+                                <tr><td colspan="6" class="px-4 py-8 text-center text-gray-500">Loading...</td></tr>
                             </tbody>
                         </table>
                     </div>
                 </div>
             </div>
 
-            <!-- Reports Tab -->
+            <!-- ====== MESSAGES TAB ====== -->
+            <div id="content-messages" class="tab-content hidden fade-in">
+                <div class="flex flex-col sm:flex-row items-start sm:items-center justify-between mb-5 gap-3">
+                    <h2 class="text-xl font-bold">WhatsApp Messages</h2>
+                    <div class="flex gap-2">
+                        <select id="msg-days" class="bg-dark-card border border-gray-600 rounded-lg px-3 py-2 text-sm" onchange="loadMessages()">
+                            <option value="1">Last 24 hours</option>
+                            <option value="7" selected>Last 7 days</option>
+                            <option value="30">Last 30 days</option>
+                        </select>
+                        <button onclick="loadMessages()" class="bg-blue-600 hover:bg-blue-700 px-4 py-2 rounded-lg text-sm font-medium">Refresh</button>
+                    </div>
+                </div>
+                <div class="bg-dark-card rounded-xl border border-gray-700 overflow-hidden">
+                    <div class="overflow-x-auto">
+                        <table class="w-full text-sm">
+                            <thead class="bg-dark-accent">
+                                <tr>
+                                    <th class="px-4 py-3 text-left text-gray-400 font-medium">Dir</th>
+                                    <th class="px-4 py-3 text-left text-gray-400 font-medium">From</th>
+                                    <th class="px-4 py-3 text-left text-gray-400 font-medium">To</th>
+                                    <th class="px-4 py-3 text-left text-gray-400 font-medium">Content</th>
+                                    <th class="px-4 py-3 text-left text-gray-400 font-medium">Category</th>
+                                    <th class="px-4 py-3 text-left text-gray-400 font-medium">Time</th>
+                                </tr>
+                            </thead>
+                            <tbody id="messages-table" class="divide-y divide-gray-700">
+                                <tr><td colspan="6" class="px-4 py-8 text-center text-gray-500">Loading...</td></tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+
+            <!-- ====== REPORTS TAB ====== -->
             <div id="content-reports" class="tab-content hidden fade-in">
-                <h2 class="text-2xl font-bold mb-6">Reports</h2>
-                <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
-                    <div class="bg-dark-card rounded-xl border border-gray-700 p-6">
-                        <div class="w-12 h-12 bg-blue-500/20 rounded-lg flex items-center justify-center mb-4">
-                            <svg class="w-6 h-6 text-blue-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 17v-2m3 2v-4m3 4v-6m2 10H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/></svg>
+                <h2 class="text-xl font-bold mb-5">Download Reports</h2>
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-5">
+                    <div class="bg-dark-card rounded-xl border border-gray-700 p-5">
+                        <div class="w-10 h-10 bg-green-500/20 rounded-lg flex items-center justify-center mb-3">
+                            <svg class="w-5 h-5 text-green-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4"/></svg>
                         </div>
-                        <h3 class="text-lg font-semibold mb-2">Message Summary</h3>
-                        <p class="text-gray-400 text-sm mb-4">Download an Excel report of all bot messages for the selected period.</p>
+                        <h3 class="font-semibold mb-2">Attendance Report</h3>
+                        <p class="text-gray-400 text-sm mb-4">Download Excel report for a specific date.</p>
+                        <div class="flex gap-2">
+                            <input type="date" id="report-date" class="bg-dark-accent border border-gray-600 rounded-lg px-3 py-2 text-sm flex-1">
+                            <button onclick="downloadReport('attendance')" class="bg-green-600 hover:bg-green-700 px-4 py-2 rounded-lg text-sm font-medium">Download</button>
+                        </div>
+                    </div>
+                    <div class="bg-dark-card rounded-xl border border-gray-700 p-5">
+                        <div class="w-10 h-10 bg-blue-500/20 rounded-lg flex items-center justify-center mb-3">
+                            <svg class="w-5 h-5 text-blue-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 10h.01M12 10h.01M16 10h.01M9 16H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-5l-5 5v-5z"/></svg>
+                        </div>
+                        <h3 class="font-semibold mb-2">Message Summary</h3>
+                        <p class="text-gray-400 text-sm mb-4">Download Excel report of all bot messages.</p>
                         <div class="flex gap-2">
                             <select id="report-days" class="bg-dark-accent border border-gray-600 rounded-lg px-3 py-2 text-sm flex-1">
                                 <option value="7">Last 7 days</option>
@@ -299,81 +354,60 @@
                             <button onclick="downloadReport('messages')" class="bg-blue-600 hover:bg-blue-700 px-4 py-2 rounded-lg text-sm font-medium">Download</button>
                         </div>
                     </div>
-                    <div class="bg-dark-card rounded-xl border border-gray-700 p-6">
-                        <div class="w-12 h-12 bg-green-500/20 rounded-lg flex items-center justify-center mb-4">
-                            <svg class="w-6 h-6 text-green-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4"/></svg>
+                </div>
+            </div>
+
+            <!-- ====== SETTINGS TAB ====== -->
+            <div id="content-settings" class="tab-content hidden fade-in">
+                <h2 class="text-xl font-bold mb-5">System Settings</h2>
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-5 max-w-4xl">
+                    <div class="bg-dark-card rounded-xl border border-gray-700 p-5">
+                        <h3 class="font-semibold mb-3">Bot Configuration</h3>
+                        <div class="space-y-3 text-sm">
+                            <div class="flex justify-between py-1.5 border-b border-gray-700"><span class="text-gray-400">Bot Number</span><span class="font-mono text-xs">+91 84489 43232</span></div>
+                            <div class="flex justify-between py-1.5 border-b border-gray-700"><span class="text-gray-400">Phone ID</span><span class="font-mono text-xs">1168433719678061</span></div>
+                            <div class="flex justify-between py-1.5 border-b border-gray-700"><span class="text-gray-400">Admin</span><span>Ali (918796105084)</span></div>
+                            <div class="flex justify-between py-1.5 border-b border-gray-700"><span class="text-gray-400">Template</span><span class="font-mono text-xs">law_minister_attendance</span></div>
+                            <div class="flex justify-between py-1.5"><span class="text-gray-400">Backend</span><span class="font-mono text-xs text-blue-400">law-minister-bot.fly.dev</span></div>
                         </div>
-                        <h3 class="text-lg font-semibold mb-2">Attendance Report</h3>
-                        <p class="text-gray-400 text-sm mb-4">Download an Excel report of attendance records for a specific date.</p>
-                        <div class="flex gap-2">
-                            <input type="date" id="report-date" class="bg-dark-accent border border-gray-600 rounded-lg px-3 py-2 text-sm flex-1">
-                            <button onclick="downloadReport('attendance')" class="bg-green-600 hover:bg-green-700 px-4 py-2 rounded-lg text-sm font-medium">Download</button>
+                    </div>
+                    <div class="bg-dark-card rounded-xl border border-gray-700 p-5">
+                        <h3 class="font-semibold mb-3">Camera Configuration</h3>
+                        <div class="space-y-3 text-sm">
+                            <div class="flex justify-between py-1.5 border-b border-gray-700"><span class="text-gray-400">NVR IP</span><span class="font-mono text-xs">192.168.1.108</span></div>
+                            <div class="flex justify-between py-1.5 border-b border-gray-700"><span class="text-gray-400">NVR Brand</span><span>CP Plus</span></div>
+                            <div class="flex justify-between py-1.5 border-b border-gray-700"><span class="text-gray-400">Active Camera</span><span>Channel 1 (Office)</span></div>
+                            <div class="flex justify-between py-1.5 border-b border-gray-700"><span class="text-gray-400">Recognition</span><span>Threshold 0.45</span></div>
+                            <div class="flex justify-between py-1.5"><span class="text-gray-400">Office Hours</span><span>7:00 AM - 6:00 PM IST</span></div>
+                        </div>
+                    </div>
+                    <div class="bg-dark-card rounded-xl border border-gray-700 p-5 md:col-span-2">
+                        <h3 class="font-semibold mb-3">WhatsApp Admin Commands</h3>
+                        <div class="grid grid-cols-1 sm:grid-cols-2 gap-2 text-sm">
+                            <div class="flex gap-3 items-center"><code class="bg-dark-accent px-2 py-1 rounded text-blue-300 w-28 text-center text-xs">summary</code><span class="text-gray-400">Excel summary of messages (7 days)</span></div>
+                            <div class="flex gap-3 items-center"><code class="bg-dark-accent px-2 py-1 rounded text-blue-300 w-28 text-center text-xs">staff</code><span class="text-gray-400">List registered staff</span></div>
+                            <div class="flex gap-3 items-center"><code class="bg-dark-accent px-2 py-1 rounded text-blue-300 w-28 text-center text-xs">today</code><span class="text-gray-400">Today's attendance records</span></div>
+                            <div class="flex gap-3 items-center"><code class="bg-dark-accent px-2 py-1 rounded text-blue-300 w-28 text-center text-xs">admin help</code><span class="text-gray-400">Show all commands</span></div>
                         </div>
                     </div>
                 </div>
             </div>
 
-            <!-- Settings Tab -->
-            <div id="content-settings" class="tab-content hidden fade-in">
-                <h2 class="text-2xl font-bold mb-6">Settings</h2>
-                <div class="bg-dark-card rounded-xl border border-gray-700 p-6 max-w-2xl">
-                    <h3 class="text-lg font-semibold mb-4">Bot Information</h3>
-                    <div class="space-y-4">
-                        <div class="flex justify-between items-center py-2 border-b border-gray-700">
-                            <span class="text-gray-400">Bot Number</span>
-                            <span class="font-mono text-sm">+91 84489 43232</span>
-                        </div>
-                        <div class="flex justify-between items-center py-2 border-b border-gray-700">
-                            <span class="text-gray-400">Phone Number ID</span>
-                            <span class="font-mono text-sm">1168433719678061</span>
-                        </div>
-                        <div class="flex justify-between items-center py-2 border-b border-gray-700">
-                            <span class="text-gray-400">WABA ID</span>
-                            <span class="font-mono text-sm">2417647228700804</span>
-                        </div>
-                        <div class="flex justify-between items-center py-2 border-b border-gray-700">
-                            <span class="text-gray-400">Admin</span>
-                            <span>Ali (918796105084)</span>
-                        </div>
-                        <div class="flex justify-between items-center py-2 border-b border-gray-700">
-                            <span class="text-gray-400">Template</span>
-                            <span class="font-mono text-sm">law_minister_attendance</span>
-                        </div>
-                        <div class="flex justify-between items-center py-2 border-b border-gray-700">
-                            <span class="text-gray-400">Backend URL</span>
-                            <span class="font-mono text-sm text-blue-400">law-minister-bot.fly.dev</span>
-                        </div>
-                        <div class="flex justify-between items-center py-2">
-                            <span class="text-gray-400">Version</span>
-                            <span>2.0.0</span>
-                        </div>
-                    </div>
-                </div>
-                <div class="bg-dark-card rounded-xl border border-gray-700 p-6 max-w-2xl mt-6">
-                    <h3 class="text-lg font-semibold mb-4">WhatsApp Admin Commands</h3>
-                    <div class="space-y-3 text-sm">
-                        <div class="flex gap-3"><code class="bg-dark-accent px-2 py-1 rounded text-blue-300 w-24 text-center">summary</code><span class="text-gray-400">Get Excel summary of all messages (7 days)</span></div>
-                        <div class="flex gap-3"><code class="bg-dark-accent px-2 py-1 rounded text-blue-300 w-24 text-center">staff</code><span class="text-gray-400">List all registered staff members</span></div>
-                        <div class="flex gap-3"><code class="bg-dark-accent px-2 py-1 rounded text-blue-300 w-24 text-center">today</code><span class="text-gray-400">View today's attendance records</span></div>
-                        <div class="flex gap-3"><code class="bg-dark-accent px-2 py-1 rounded text-blue-300 w-24 text-center">admin help</code><span class="text-gray-400">Show all available commands</span></div>
-                    </div>
-                </div>
-            </div>
         </main>
     </div>
 
     <!-- Add Staff Modal -->
-    <div id="staff-modal" class="fixed inset-0 bg-black/50 hidden items-center justify-center z-50">
+    <div id="staff-modal" class="fixed inset-0 bg-black/60 hidden items-center justify-center z-50">
         <div class="bg-dark-card rounded-xl border border-gray-700 p-6 w-full max-w-md mx-4">
             <h3 class="text-lg font-semibold mb-4">Add Staff Member</h3>
             <div class="space-y-4">
                 <div>
                     <label class="block text-sm text-gray-400 mb-1">Name</label>
-                    <input type="text" id="staff-name" class="w-full bg-dark-accent border border-gray-600 rounded-lg px-3 py-2 text-sm" placeholder="Rahul Sharma">
+                    <input type="text" id="staff-name" class="w-full bg-dark-accent border border-gray-600 rounded-lg px-3 py-2 text-sm" placeholder="Full Name">
                 </div>
                 <div>
-                    <label class="block text-sm text-gray-400 mb-1">Phone (10 digits)</label>
-                    <input type="text" id="staff-phone" class="w-full bg-dark-accent border border-gray-600 rounded-lg px-3 py-2 text-sm" placeholder="9876543210">
+                    <label class="block text-sm text-gray-400 mb-1">Phone (with country code)</label>
+                    <input type="text" id="staff-phone" class="w-full bg-dark-accent border border-gray-600 rounded-lg px-3 py-2 text-sm" placeholder="919876543210">
                 </div>
                 <div>
                     <label class="block text-sm text-gray-400 mb-1">Designation</label>
@@ -389,81 +423,261 @@
 
     <script>
         const API = window.location.origin;
+        let allLogs = [];
 
-        // Clock
+        // ---------- Clock ----------
         function updateClock() {
-            const now = new Date();
-            const ist = new Date(now.getTime() + (5.5 * 60 * 60 * 1000));
-            document.getElementById('clock').textContent = ist.toLocaleString('en-IN', { timeZone: 'Asia/Kolkata', hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: true }) + ' IST';
+            document.getElementById('clock').textContent =
+                new Date().toLocaleString('en-IN', { timeZone: 'Asia/Kolkata', hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: true }) + ' IST';
         }
         setInterval(updateClock, 1000);
         updateClock();
 
-        // Tab Navigation
+        // ---------- Mobile sidebar ----------
+        function toggleSidebar() {
+            const sb = document.getElementById('sidebar');
+            sb.classList.toggle('open');
+        }
+
+        // ---------- Tab Navigation ----------
         function showTab(name) {
             document.querySelectorAll('.tab-content').forEach(el => el.classList.add('hidden'));
-            document.querySelectorAll('.tab-btn').forEach(el => {
-                el.classList.remove('bg-dark-accent', 'text-white');
-                el.classList.add('text-gray-400');
-            });
+            document.querySelectorAll('.tab-btn').forEach(el => { el.classList.remove('bg-dark-accent', 'text-white'); el.classList.add('text-gray-400'); });
             document.getElementById(`content-${name}`).classList.remove('hidden');
             const btn = document.getElementById(`tab-${name}`);
-            btn.classList.add('bg-dark-accent', 'text-white');
-            btn.classList.remove('text-gray-400');
-
-            if (name === 'messages') loadMessages();
-            if (name === 'staff') loadStaff();
+            if (btn) { btn.classList.add('bg-dark-accent', 'text-white'); btn.classList.remove('text-gray-400'); }
+            // Close mobile sidebar
+            document.getElementById('sidebar').classList.remove('open');
+            // Load data for tab
             if (name === 'attendance') loadAttendance();
+            if (name === 'staff') loadStaff();
+            if (name === 'logs') fetchLogs();
+            if (name === 'messages') loadMessages();
             if (name === 'registrations') loadRegistrations();
         }
 
-        // API Calls
+        // ---------- API helper ----------
         async function fetchJSON(url) {
-            try {
-                const resp = await fetch(url);
-                return await resp.json();
-            } catch (e) {
-                console.error('API error:', e);
-                return null;
+            try { return await (await fetch(url)).json(); } catch (e) { console.error('API:', e); return null; }
+        }
+
+        // ---------- Engine Status ----------
+        async function updateEngineStatus() {
+            const data = await fetchJSON(`${API}/api/engine-status`);
+            const dot = document.getElementById('engine-dot');
+            const label = document.getElementById('engine-label');
+            const banner = document.getElementById('engine-banner');
+            const icon = document.getElementById('engine-icon');
+            const title = document.getElementById('engine-title');
+            const subtitle = document.getElementById('engine-subtitle');
+            const details = document.getElementById('engine-details');
+
+            if (!data) {
+                label.textContent = 'Error';
+                dot.className = 'w-2 h-2 rounded-full bg-red-500';
+                return;
+            }
+
+            if (data.status === 'online') {
+                dot.className = 'w-2 h-2 rounded-full bg-green-500 pulse-dot';
+                label.textContent = 'Online';
+                label.className = 'text-green-400';
+                banner.className = 'mb-5 rounded-xl p-4 border border-green-500/30 bg-green-500/5';
+                icon.className = 'w-12 h-12 rounded-xl flex items-center justify-center bg-green-500/20';
+                icon.innerHTML = '<svg class="w-6 h-6 text-green-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/></svg>';
+                title.textContent = 'Engine Online';
+                title.className = 'font-semibold text-base text-green-400';
+                subtitle.textContent = 'Camera connected, detecting faces';
+                details.innerHTML = `Last seen: ${data.last_seen || 'N/A'}<br>${data.minutes_ago || 0} min ago`;
+            } else {
+                dot.className = 'w-2 h-2 rounded-full bg-red-500 pulse-dot';
+                label.textContent = 'Offline';
+                label.className = 'text-red-400';
+                banner.className = 'mb-5 rounded-xl p-4 border border-red-500/30 bg-red-500/5';
+                icon.className = 'w-12 h-12 rounded-xl flex items-center justify-center bg-red-500/20';
+                icon.innerHTML = '<svg class="w-6 h-6 text-red-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"/></svg>';
+                title.textContent = 'Engine Offline';
+                title.className = 'font-semibold text-base text-red-400';
+                subtitle.textContent = data.last_seen ? `Last seen: ${data.last_seen}` : 'Engine has not reported in';
+                details.innerHTML = data.minutes_ago ? `Offline for ${data.minutes_ago} min` : 'Office PC may be turned off';
             }
         }
 
-        // Dashboard
+        // ---------- Parse engine stats from logs ----------
+        function parseEngineStats(logs) {
+            let faces = 0, frames = 0, matches = 0;
+            for (let i = logs.length - 1; i >= 0; i--) {
+                const m = logs[i].match(/Stats:\s*(\d+)\s*frames?,\s*(\d+)\s*faces?\s*detected,\s*(\d+)\s*match/i);
+                if (m) { frames = parseInt(m[1]); faces = parseInt(m[2]); matches = parseInt(m[3]); break; }
+            }
+            return { faces, frames, matches };
+        }
+
+        // ---------- Dashboard ----------
         async function loadDashboard() {
-            const [msgs, staff, att] = await Promise.all([
-                fetchJSON(`${API}/api/messages?days=1`),
+            const [staff, att, logs, engine] = await Promise.all([
                 fetchJSON(`${API}/api/staff`),
                 fetchJSON(`${API}/api/attendance`),
+                fetchJSON(`${API}/api/engine-logs?limit=500`),
+                updateEngineStatus(),
             ]);
 
-            if (msgs) document.getElementById('stat-messages').textContent = msgs.count || 0;
             if (staff) document.getElementById('stat-staff').textContent = staff.staff?.length || 0;
             if (att) document.getElementById('stat-attendance').textContent = att.count || 0;
 
-            // Recent messages
-            if (msgs && msgs.messages && msgs.messages.length > 0) {
-                const container = document.getElementById('recent-messages');
-                container.innerHTML = msgs.messages.slice(0, 10).map(m => `
-                    <div class="flex items-start gap-3 p-3 rounded-lg bg-dark-accent/50">
-                        <div class="w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold ${m.direction === 'incoming' ? 'bg-blue-500/20 text-blue-400' : 'bg-green-500/20 text-green-400'}">
-                            ${m.direction === 'incoming' ? 'IN' : 'OUT'}
-                        </div>
-                        <div class="flex-1 min-w-0">
-                            <div class="flex items-center gap-2">
-                                <span class="text-sm font-medium">${m.sender || 'Unknown'}</span>
-                                <span class="text-xs text-gray-500">${m.timestamp || ''}</span>
+            // Engine stats from logs
+            if (logs && logs.logs) {
+                allLogs = logs.logs;
+                const stats = parseEngineStats(logs.logs);
+                document.getElementById('stat-faces').textContent = stats.faces.toLocaleString();
+                document.getElementById('stat-frames').textContent = stats.frames.toLocaleString();
+            }
+
+            // Today's attendance list
+            const container = document.getElementById('today-attendance');
+            if (att && att.records && att.records.length > 0) {
+                container.innerHTML = att.records.map((r, i) => `
+                    <div class="flex items-center justify-between py-2.5 ${i > 0 ? 'border-t border-gray-700' : ''}">
+                        <div class="flex items-center gap-3">
+                            <div class="w-8 h-8 rounded-full bg-green-500/20 flex items-center justify-center text-green-400 font-bold text-xs">
+                                ${(r.staff_name || '?')[0].toUpperCase()}
                             </div>
-                            <p class="text-sm text-gray-400 truncate">${(m.content || '').substring(0, 100)}</p>
+                            <div>
+                                <p class="font-medium text-sm capitalize">${r.staff_name}</p>
+                                <p class="text-xs text-gray-500">${r.date}</p>
+                            </div>
                         </div>
-                        <span class="text-xs px-2 py-1 rounded ${m.category === 'greeting' ? 'bg-blue-500/20 text-blue-300' : m.category === 'admin_command' ? 'bg-gold/20 text-gold' : 'bg-gray-600 text-gray-300'}">${m.category || 'msg'}</span>
+                        <div class="text-right">
+                            <p class="text-sm font-medium text-green-400">${r.time}</p>
+                            <p class="text-xs ${r.notification_sent ? 'text-blue-400' : 'text-gray-500'}">${r.notification_sent ? 'Notified' : 'Pending'}</p>
+                        </div>
                     </div>
                 `).join('');
             } else {
-                document.getElementById('recent-messages').innerHTML = '<p class="text-gray-500 text-sm text-center py-4">No messages yet</p>';
+                container.innerHTML = '<p class="text-gray-500 text-sm text-center py-6">No attendance recorded today</p>';
+            }
+
+            // Recent engine activity
+            if (logs && logs.logs) {
+                const keyEvents = logs.logs.filter(l =>
+                    /match|attend|connect|stats|started|loaded|error|failed/i.test(l)
+                ).slice(-10);
+                const actDiv = document.getElementById('recent-activity');
+                if (keyEvents.length > 0) {
+                    actDiv.innerHTML = keyEvents.map(l => {
+                        let cls = 'log-info';
+                        if (/error/i.test(l)) cls = 'log-error';
+                        else if (/warning|failed/i.test(l)) cls = 'log-warning';
+                        else if (/match|attend/i.test(l)) cls = 'log-match';
+                        return `<div class="log-line ${cls} py-0.5">${escHTML(l)}</div>`;
+                    }).join('');
+                } else {
+                    actDiv.innerHTML = '<p class="text-gray-500 text-sm text-center py-4">No recent activity</p>';
+                }
             }
         }
 
-        // Messages
+        // ---------- Attendance ----------
+        function getISTDate() {
+            return new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Kolkata' });
+        }
+        function formatDateForAPI(isoDate) {
+            if (!isoDate) return '';
+            const [y, m, d] = isoDate.split('-');
+            return `${d}-${m}-${y}`;
+        }
+
+        async function loadAttendance() {
+            const dateInput = document.getElementById('att-date').value;
+            const apiDate = formatDateForAPI(dateInput);
+            const data = await fetchJSON(`${API}/api/attendance?date=${apiDate}`);
+            const tbody = document.getElementById('attendance-table');
+            const summary = document.getElementById('attendance-summary');
+            if (data && data.records && data.records.length > 0) {
+                tbody.innerHTML = data.records.map((r, i) => `
+                    <tr class="hover:bg-dark-accent/30">
+                        <td class="px-4 py-3 text-gray-400">${i + 1}</td>
+                        <td class="px-4 py-3 font-medium capitalize">${r.staff_name || ''}</td>
+                        <td class="px-4 py-3">${r.date || ''}</td>
+                        <td class="px-4 py-3">${r.time || ''}</td>
+                        <td class="px-4 py-3"><span class="px-2 py-0.5 rounded text-xs font-medium bg-green-500/20 text-green-300">Present</span></td>
+                        <td class="px-4 py-3">${r.notification_sent ? '<span class="text-blue-400 text-xs">Sent</span>' : '<span class="text-gray-500 text-xs">Pending</span>'}</td>
+                    </tr>
+                `).join('');
+                summary.textContent = `Total: ${data.count} staff members marked present`;
+            } else {
+                tbody.innerHTML = '<tr><td colspan="6" class="px-4 py-8 text-center text-gray-500">No attendance records for this date</td></tr>';
+                summary.textContent = '';
+            }
+        }
+
+        // ---------- Staff ----------
+        async function loadStaff() {
+            const data = await fetchJSON(`${API}/api/staff`);
+            const grid = document.getElementById('staff-grid');
+            if (data && data.staff && data.staff.length > 0) {
+                grid.innerHTML = data.staff.map(s => `
+                    <div class="bg-dark-card rounded-xl border border-gray-700 p-4">
+                        <div class="flex items-center gap-3 mb-2">
+                            <div class="w-10 h-10 bg-blue-500/20 rounded-full flex items-center justify-center text-blue-400 font-bold">
+                                ${(s.name || '?')[0].toUpperCase()}
+                            </div>
+                            <div>
+                                <p class="font-medium capitalize">${s.name || 'Unknown'}</p>
+                                <p class="text-xs text-gray-400">${s.designation || 'Staff'}</p>
+                            </div>
+                        </div>
+                        <div class="text-sm text-gray-400 font-mono">${s.phone || ''}</div>
+                        <div class="text-xs text-gray-500 mt-1">Since ${s.created_at ? s.created_at.substring(0, 10) : 'N/A'}</div>
+                    </div>
+                `).join('');
+            } else {
+                grid.innerHTML = '<p class="text-gray-500 text-sm col-span-3 text-center py-8">No staff registered. Add staff or have them send a photo via WhatsApp.</p>';
+            }
+        }
+
+        // ---------- Engine Logs ----------
+        function escHTML(s) { return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;'); }
+
+        function classifyLog(line) {
+            if (/ERROR/i.test(line)) return 'log-error';
+            if (/WARNING/i.test(line)) return 'log-warning';
+            if (/match|attend|ATTENDANCE/i.test(line)) return 'log-match';
+            return 'log-info';
+        }
+
+        function renderLogs() {
+            const filter = document.getElementById('log-filter').value;
+            const container = document.getElementById('log-container');
+            let filtered = allLogs;
+            if (filter === 'key') {
+                filtered = allLogs.filter(l => /match|attend|connect|stats|started|loaded|error|failed|known face/i.test(l));
+            } else if (filter === 'errors') {
+                filtered = allLogs.filter(l => /ERROR|WARNING/i.test(l));
+            } else if (filter === 'attendance') {
+                filtered = allLogs.filter(l => /match|attend|ATTENDANCE/i.test(l));
+            }
+            if (filtered.length > 0) {
+                container.innerHTML = filtered.map(l => `<div class="log-line ${classifyLog(l)}">${escHTML(l)}</div>`).join('');
+                container.scrollTop = container.scrollHeight;
+            } else {
+                container.innerHTML = '<p class="text-gray-500 text-sm text-center py-8">No logs matching filter</p>';
+            }
+        }
+
+        async function fetchLogs() {
+            const data = await fetchJSON(`${API}/api/engine-logs?limit=500`);
+            const status = document.getElementById('log-status');
+            if (data && data.logs) {
+                allLogs = data.logs;
+                status.textContent = `${data.count} log lines - updated ${new Date().toLocaleTimeString('en-IN', { timeZone: 'Asia/Kolkata' })} IST`;
+                renderLogs();
+            } else {
+                status.textContent = 'Failed to fetch logs';
+            }
+        }
+
+        // ---------- Messages ----------
         async function loadMessages() {
             const days = document.getElementById('msg-days').value;
             const data = await fetchJSON(`${API}/api/messages?days=${days}`);
@@ -471,11 +685,11 @@
             if (data && data.messages && data.messages.length > 0) {
                 tbody.innerHTML = data.messages.map(m => `
                     <tr class="hover:bg-dark-accent/30">
-                        <td class="px-4 py-3"><span class="px-2 py-1 rounded text-xs font-medium ${m.direction === 'incoming' ? 'bg-blue-500/20 text-blue-300' : 'bg-green-500/20 text-green-300'}">${m.direction}</span></td>
+                        <td class="px-4 py-3"><span class="px-2 py-0.5 rounded text-xs font-medium ${m.direction === 'incoming' ? 'bg-blue-500/20 text-blue-300' : 'bg-green-500/20 text-green-300'}">${m.direction === 'incoming' ? 'IN' : 'OUT'}</span></td>
                         <td class="px-4 py-3 font-mono text-xs">${m.sender || ''}</td>
                         <td class="px-4 py-3 font-mono text-xs">${m.recipient || ''}</td>
-                        <td class="px-4 py-3 max-w-xs truncate">${(m.content || '').substring(0, 80)}</td>
-                        <td class="px-4 py-3"><span class="text-xs px-2 py-1 rounded bg-dark-accent">${m.category || '-'}</span></td>
+                        <td class="px-4 py-3 max-w-xs truncate text-xs">${(m.content || '').substring(0, 100)}</td>
+                        <td class="px-4 py-3"><span class="text-xs px-2 py-0.5 rounded bg-dark-accent">${m.category || '-'}</span></td>
                         <td class="px-4 py-3 text-xs text-gray-400">${m.timestamp || ''}</td>
                     </tr>
                 `).join('');
@@ -484,138 +698,71 @@
             }
         }
 
-        // Staff
-        async function loadStaff() {
-            const data = await fetchJSON(`${API}/api/staff`);
-            const grid = document.getElementById('staff-grid');
-            if (data && data.staff && data.staff.length > 0) {
-                grid.innerHTML = data.staff.map(s => `
-                    <div class="bg-dark-card rounded-xl border border-gray-700 p-5">
-                        <div class="flex items-center gap-3 mb-3">
-                            <div class="w-10 h-10 bg-blue-500/20 rounded-full flex items-center justify-center text-blue-400 font-bold">
-                                ${(s.name || '?')[0].toUpperCase()}
-                            </div>
-                            <div>
-                                <p class="font-medium">${s.name || 'Unknown'}</p>
-                                <p class="text-xs text-gray-400">${s.designation || 'Staff'}</p>
-                            </div>
-                        </div>
-                        <div class="text-sm text-gray-400 font-mono">${s.phone || ''}</div>
-                    </div>
-                `).join('');
-            } else {
-                grid.innerHTML = '<p class="text-gray-500 text-sm col-span-3 text-center py-8">No staff members registered yet. Click "Add Staff" to get started.</p>';
-            }
-        }
-
-        // Attendance
-        async function loadAttendance() {
-            const date = document.getElementById('att-date').value;
-            const data = await fetchJSON(`${API}/api/attendance?date=${date}`);
-            const tbody = document.getElementById('attendance-table');
-            if (data && data.records && data.records.length > 0) {
-                tbody.innerHTML = data.records.map((r, i) => `
-                    <tr class="hover:bg-dark-accent/30">
-                        <td class="px-4 py-3">${i + 1}</td>
-                        <td class="px-4 py-3 font-medium">${r.staff_name || ''}</td>
-                        <td class="px-4 py-3">${r.date || ''}</td>
-                        <td class="px-4 py-3">${r.time || ''}</td>
-                        <td class="px-4 py-3"><span class="px-2 py-1 rounded text-xs font-medium bg-green-500/20 text-green-300">${r.status || 'present'}</span></td>
-                    </tr>
-                `).join('');
-            } else {
-                tbody.innerHTML = '<tr><td colspan="5" class="px-4 py-8 text-center text-gray-500">No attendance records found</td></tr>';
-            }
-        }
-
-        // Add Staff Modal
-        function showAddStaffModal() {
-            document.getElementById('staff-modal').classList.remove('hidden');
-            document.getElementById('staff-modal').classList.add('flex');
-        }
-        function hideAddStaffModal() {
-            document.getElementById('staff-modal').classList.add('hidden');
-            document.getElementById('staff-modal').classList.remove('flex');
-            document.getElementById('staff-name').value = '';
-            document.getElementById('staff-phone').value = '';
-            document.getElementById('staff-designation').value = '';
-        }
-        async function addStaff() {
-            const name = document.getElementById('staff-name').value.trim();
-            const phone = document.getElementById('staff-phone').value.trim();
-            const designation = document.getElementById('staff-designation').value.trim();
-            if (!name || !phone) { alert('Name and Phone are required'); return; }
-            try {
-                const resp = await fetch(`${API}/api/staff`, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ name, phone, designation }),
-                });
-                const data = await resp.json();
-                if (data.success) {
-                    hideAddStaffModal();
-                    loadStaff();
-                    loadDashboard();
-                } else {
-                    alert('Failed to add staff');
-                }
-            } catch (e) {
-                alert('Error: ' + e.message);
-            }
-        }
-
-        // Registrations
+        // ---------- Registrations ----------
         async function loadRegistrations() {
             const filter = document.getElementById('reg-filter').value;
             const [regsData, statsData] = await Promise.all([
                 fetchJSON(`${API}/api/registrations?status=${filter}`),
                 fetchJSON(`${API}/api/registrations/stats`),
             ]);
-
             if (statsData) {
                 document.getElementById('reg-total').textContent = statsData.total || 0;
                 document.getElementById('reg-registered').textContent = statsData.registered || 0;
                 document.getElementById('reg-rejected').textContent = statsData.rejected || 0;
                 document.getElementById('reg-pending').textContent = statsData.pending || 0;
             }
-
             const tbody = document.getElementById('registrations-body');
             if (regsData && regsData.registrations && regsData.registrations.length > 0) {
                 tbody.innerHTML = regsData.registrations.map(r => `
                     <tr class="hover:bg-dark-accent/30">
-                        <td class="px-4 py-3 font-medium">${r.name || ''}</td>
-                        <td class="px-4 py-3 text-gray-400">${r.phone || ''}</td>
-                        <td class="px-4 py-3">
-                            <span class="px-2 py-1 rounded text-xs ${r.status === 'registered' ? 'bg-green-500/20 text-green-400' : r.status === 'rejected' ? 'bg-red-500/20 text-red-400' : 'bg-yellow-500/20 text-yellow-400'}">${r.status}</span>
-                        </td>
-                        <td class="px-4 py-3 text-gray-500 text-xs">${r.reason || '—'}</td>
-                        <td class="px-4 py-3">
-                            <span class="text-xs ${r.embedding_synced ? 'text-green-400' : 'text-yellow-400'}">${r.embedding_synced ? 'Yes' : 'No'}</span>
-                        </td>
+                        <td class="px-4 py-3 font-medium capitalize">${r.name || ''}</td>
+                        <td class="px-4 py-3 text-gray-400 font-mono text-xs">${r.phone || ''}</td>
+                        <td class="px-4 py-3"><span class="px-2 py-0.5 rounded text-xs ${r.status === 'registered' ? 'bg-green-500/20 text-green-400' : r.status === 'rejected' ? 'bg-red-500/20 text-red-400' : 'bg-yellow-500/20 text-yellow-400'}">${r.status}</span></td>
+                        <td class="px-4 py-3 text-gray-500 text-xs">${r.reason || '-'}</td>
+                        <td class="px-4 py-3"><span class="text-xs ${r.embedding_synced ? 'text-green-400' : 'text-yellow-400'}">${r.embedding_synced ? 'Yes' : 'No'}</span></td>
                         <td class="px-4 py-3 text-gray-500 text-xs">${r.registered_at || ''}</td>
                     </tr>
                 `).join('');
             } else {
-                tbody.innerHTML = '<tr><td colspan="6" class="px-4 py-8 text-center text-gray-500">No registrations yet</td></tr>';
+                tbody.innerHTML = '<tr><td colspan="6" class="px-4 py-8 text-center text-gray-500">No registrations found</td></tr>';
             }
         }
 
-        // Reports
+        // ---------- Staff Modal ----------
+        function showAddStaffModal() { document.getElementById('staff-modal').classList.remove('hidden'); document.getElementById('staff-modal').classList.add('flex'); }
+        function hideAddStaffModal() { document.getElementById('staff-modal').classList.add('hidden'); document.getElementById('staff-modal').classList.remove('flex'); ['staff-name','staff-phone','staff-designation'].forEach(id => document.getElementById(id).value = ''); }
+        async function addStaff() {
+            const name = document.getElementById('staff-name').value.trim();
+            const phone = document.getElementById('staff-phone').value.trim();
+            const designation = document.getElementById('staff-designation').value.trim();
+            if (!name || !phone) { alert('Name and Phone are required'); return; }
+            try {
+                const resp = await fetch(`${API}/api/staff`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ name, phone, designation }) });
+                const data = await resp.json();
+                if (data.success) { hideAddStaffModal(); loadStaff(); loadDashboard(); } else { alert('Failed to add staff'); }
+            } catch (e) { alert('Error: ' + e.message); }
+        }
+
+        // ---------- Reports ----------
         function downloadReport(type) {
             if (type === 'messages') {
-                const days = document.getElementById('report-days').value;
-                window.open(`${API}/api/report/messages?days=${days}`, '_blank');
+                window.open(`${API}/api/report/messages?days=${document.getElementById('report-days').value}`, '_blank');
             } else {
-                const date = document.getElementById('report-date').value;
-                window.open(`${API}/api/report/attendance?date=${date}`, '_blank');
+                const d = document.getElementById('report-date').value;
+                const apiDate = formatDateForAPI(d);
+                window.open(`${API}/api/report/attendance?date=${apiDate}`, '_blank');
             }
         }
 
-        // Init
-        document.getElementById('att-date').valueAsDate = new Date();
-        document.getElementById('report-date').valueAsDate = new Date();
+        // ---------- Init ----------
+        document.getElementById('att-date').value = getISTDate();
+        document.getElementById('report-date').value = getISTDate();
         loadDashboard();
-        setInterval(loadDashboard, 30000); // Auto-refresh every 30s
+
+        // Auto-refresh: dashboard every 30s, engine status every 15s, logs every 10s
+        setInterval(loadDashboard, 30000);
+        setInterval(updateEngineStatus, 15000);
+        setInterval(() => { if (document.getElementById('autoRefreshLogs') && document.getElementById('autoRefreshLogs').checked && !document.getElementById('content-logs').classList.contains('hidden')) fetchLogs(); }, 10000);
     </script>
 </body>
 </html>
