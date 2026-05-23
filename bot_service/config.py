@@ -14,9 +14,7 @@ if not os.path.exists(os.path.dirname(DB_PATH)):
     DB_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), "lm_bot.db")
 
 # Admin numbers (with country code)
-ADMINS = {
-    "918796105084": "Ali",
-}
+ADMINS = {}
 
 # Daily summary recipients (phone -> name)
 DAILY_SUMMARY_RECIPIENTS = {}
