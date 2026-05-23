@@ -11,6 +11,7 @@ import logging
 import os
 import threading
 from datetime import datetime
+from pathlib import Path
 
 import httpx
 
@@ -87,12 +88,98 @@ def send_text_message(cfg: dict, to: str, body: str) -> bool:
         return False
 
 
+def upload_media(cfg: dict, image_path: str) -> str | None:
+    """Upload an image to Meta Cloud API and return the media ID.
+
+    The media ID can then be used in send_image_message().
+    """
+    token = _get_token()
+    phone_id = _get_phone_id(cfg)
+
+    if not token or not phone_id:
+        logger.warning("WhatsApp not configured (missing token or phone_id)")
+        return None
+
+    path = Path(image_path)
+    if not path.exists():
+        logger.error(f"Snapshot file not found: {image_path}")
+        return None
+
+    url = f"{GRAPH_API}/{phone_id}/media"
+    headers = {"Authorization": f"Bearer {token}"}
+
+    try:
+        with open(path, "rb") as f:
+            files = {
+                "file": (path.name, f, "image/jpeg"),
+            }
+            data = {
+                "messaging_product": "whatsapp",
+                "type": "image/jpeg",
+            }
+            resp = httpx.post(url, headers=headers, files=files, data=data, timeout=30)
+
+        if resp.status_code == 200:
+            media_id = resp.json().get("id")
+            logger.info(f"Media uploaded: {path.name} → media_id={media_id}")
+            return media_id
+        else:
+            logger.error(f"Media upload error {resp.status_code}: {resp.text}")
+            return None
+    except Exception as e:
+        logger.error(f"Media upload failed: {e}")
+        return None
+
+
+def send_image_message(cfg: dict, to: str, media_id: str,
+                       caption: str = "") -> bool:
+    """Send an image message via Meta Cloud API using a previously uploaded media ID."""
+    token = _get_token()
+    phone_id = _get_phone_id(cfg)
+
+    if not token or not phone_id:
+        logger.warning("WhatsApp not configured (missing token or phone_id)")
+        return False
+
+    to = _format_phone(to)
+
+    url = f"{GRAPH_API}/{phone_id}/messages"
+    headers = {
+        "Authorization": f"Bearer {token}",
+        "Content-Type": "application/json",
+    }
+    image_obj: dict = {"id": media_id}
+    if caption:
+        image_obj["caption"] = caption
+
+    payload = {
+        "messaging_product": "whatsapp",
+        "to": to,
+        "type": "image",
+        "image": image_obj,
+    }
+
+    try:
+        resp = httpx.post(url, json=payload, headers=headers, timeout=15)
+        if resp.status_code == 200:
+            logger.info(f"WhatsApp image sent to {to}")
+            return True
+        else:
+            logger.error(f"WhatsApp image send error {resp.status_code}: {resp.text}")
+            return False
+    except Exception as e:
+        logger.error(f"WhatsApp image send failed: {e}")
+        return False
+
+
 def send_template_message(cfg: dict, to: str, template_name: str,
                           parameters: list[str] | None = None,
-                          language: str = "en") -> bool:
+                          language: str = "en",
+                          header_media_id: str | None = None) -> bool:
     """Send a pre-approved template message via Meta Cloud API.
 
     Template messages bypass the 24-hour opt-in window.
+    If header_media_id is provided, the template header is set to that image.
     """
     token = _get_token()
     phone_id = _get_phone_id(cfg)
@@ -113,13 +200,25 @@ def send_template_message(cfg: dict, to: str, template_name: str,
         "name": template_name,
         "language": {"code": language},
     }
+
+    components = []
+    if header_media_id:
+        components.append({
+            "type": "header",
+            "parameters": [{
+                "type": "image",
+                "image": {"id": header_media_id},
+            }],
+        })
     if parameters:
-        template_obj["components"] = [{
+        components.append({
             "type": "body",
             "parameters": [
                 {"type": "text", "text": p} for p in parameters
             ],
-        }]
+        })
+    if components:
+        template_obj["components"] = components
 
     payload = {
         "messaging_product": "whatsapp",
@@ -159,13 +258,59 @@ def send_registration_rejected(cfg: dict, to: str, reason: str) -> bool:
     return send_text_message(cfg, to, msgs.registration_rejected(reason))
 
 
-def notify_checkin(cfg: dict, staff_name: str, staff_id: str,
-                   confidence: float, camera: str):
-    """Send attendance notification matching the official format.
+ATTENDANCE_TEMPLATE = "law_minister_attendance_notification"
 
-    Uses the government-office spec:
-      Attendance Marked Successfully
-      Name / Date / Time / Status: Present
+
+def _send_checkin_with_snapshot(cfg: dict, recipient: str,
+                                staff_name: str, date_str: str,
+                                time_str: str,
+                                snapshot_path: str | None):
+    """Send attendance notification using the Meta-approved template.
+
+    Priority chain:
+    1. Template message with image header (works outside 24h window)
+    2. Image message with caption (fallback if template fails)
+    3. Text-only message (final fallback)
+    """
+    media_id = None
+    if snapshot_path:
+        media_id = upload_media(cfg, snapshot_path)
+
+    # Try template message first (bypasses 24h opt-in window)
+    sent = send_template_message(
+        cfg, recipient, ATTENDANCE_TEMPLATE,
+        parameters=[staff_name, date_str, time_str],
+        header_media_id=media_id,
+    )
+    if sent:
+        return
+
+    logger.warning("Template send failed, falling back to image+caption")
+
+    # Fallback: image with caption
+    body = msgs.attendance_notification(
+        name=staff_name, date_str=date_str, time_str=time_str, status="Present",
+    )
+    if media_id:
+        sent = send_image_message(cfg, recipient, media_id, caption=body)
+        if sent:
+            return
+        logger.warning("Image send failed, falling back to text-only")
+
+    # Final fallback: text-only
+    send_text_message(cfg, recipient, body)
+
+
+def notify_checkin(cfg: dict, staff_name: str, staff_id: str,
+                   confidence: float, camera: str,
+                   snapshot_path: str | None = None):
+    """Send attendance notification with snapshot via Meta template.
+
+    Uses the approved 'office_attendance' template with:
+      Header: Face snapshot image
+      Body: employee_name, date, time
+
+    Falls back to image+caption, then text-only if template fails.
     """
     if not is_configured(cfg):
         return
@@ -175,16 +320,9 @@ def notify_checkin(cfg: dict, staff_name: str, staff_id: str,
     time_str = now.strftime("%I:%M %p")
     date_str = now.strftime("%d/%m/%Y")
 
-    body = msgs.attendance_notification(
-        name=staff_name,
-        date_str=date_str,
-        time_str=time_str,
-        status="Present",
-    )
-
     threading.Thread(
-        target=send_text_message,
-        args=(cfg, recipient, body),
+        target=_send_checkin_with_snapshot,
+        args=(cfg, recipient, staff_name, date_str, time_str, snapshot_path),
         daemon=True,
     ).start()
 

@@ -166,7 +166,7 @@ class LivenessChecker:
 
         # --- Landmark tracking ---
         landmarks = getattr(face_obj, "landmark_2d_106", None)
-        if landmarks is not None and len(landmarks) >= 97:
+        if landmarks is not None and len(landmarks) >= 98:
             landmarks = np.array(landmarks, dtype=np.float32)
             buf.landmarks_history.append(landmarks)
 
