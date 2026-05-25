@@ -179,6 +179,36 @@ def _normalize_date(date_str: str) -> str:
     return date_str
 
 
+async def is_already_present_today(staff_name: str, phone: str, date_str: str) -> bool:
+    """Check if a staff member already has an attendance record for the given date."""
+    date_str = _normalize_date(date_str)
+    db = await get_db()
+    try:
+        cursor = await db.execute(
+            "SELECT id FROM attendance WHERE staff_name = ? AND date = ? LIMIT 1",
+            (staff_name, date_str),
+        )
+        row = await cursor.fetchone()
+        if row:
+            return True
+        # Also check by phone via staff_id
+        cursor = await db.execute("SELECT id FROM staff WHERE phone = ?", (phone,))
+        staff_row = await cursor.fetchone()
+        if staff_row:
+            cursor = await db.execute(
+                "SELECT id FROM attendance WHERE staff_id = ? AND date = ? LIMIT 1",
+                (staff_row["id"], date_str),
+            )
+            row = await cursor.fetchone()
+            return row is not None
+        return False
+    except Exception as e:
+        logger.error(f"Failed to check duplicate attendance: {e}")
+        return False
+    finally:
+        await db.close()
+
+
 async def record_attendance(staff_name: str, phone: str, date_str: str, time_str: str) -> bool:
     """Record an attendance entry in the database."""
     date_str = _normalize_date(date_str)
@@ -196,6 +226,16 @@ async def record_attendance(staff_name: str, phone: str, date_str: str, time_str
             )
             await db.commit()
             staff_id = cursor.lastrowid
+
+        # Prevent duplicate entries for the same person on the same day
+        cursor = await db.execute(
+            "SELECT id FROM attendance WHERE staff_id = ? AND date = ? LIMIT 1",
+            (staff_id, date_str),
+        )
+        existing = await cursor.fetchone()
+        if existing:
+            logger.info(f"Skipping duplicate attendance for {staff_name} on {date_str}")
+            return False
 
         await db.execute(
             "INSERT INTO attendance (staff_id, staff_name, date, time, status, notification_sent) "
