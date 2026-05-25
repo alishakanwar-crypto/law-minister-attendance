@@ -281,6 +281,18 @@ async def notify_attendance(request: Request):
     if not staff_name or not phone:
         return JSONResponse(status_code=400, content={"error": "staff_name and phone required"})
 
+    # Server-side deduplication: skip if already marked present today
+    already_present = await db.is_already_present_today(staff_name, phone, date_str)
+    if already_present:
+        logger.info(f"Duplicate attendance skipped for {staff_name} on {date_str}")
+        return JSONResponse(content={
+            "sent": False,
+            "staff": staff_name,
+            "duplicate": True,
+            "timestamp_ist": ts["human"],
+            "iso": ts["iso"],
+        })
+
     # Send text-only template (no image header)
     template_name = "law_minister_attendance"
     parameters = [staff_name, date_str, time_str]
