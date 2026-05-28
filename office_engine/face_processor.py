@@ -100,7 +100,7 @@ def extract_embedding(image_path: Path) -> np.ndarray | None:
 def match_face(
     frame_embedding: np.ndarray,
     known_embeddings: dict,
-    threshold: float = 0.40,
+    threshold: float = 0.45,
 ) -> tuple[str | None, float]:
     """Match a face embedding against known embeddings.
 

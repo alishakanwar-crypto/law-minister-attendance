@@ -12,7 +12,7 @@ DEFAULT_CONFIG = {
     "cloud_url": "https://law-minister-bot.fly.dev",
     "sync_interval_seconds": 60,
     "snapshot_interval_seconds": 5,
-    "recognition_threshold": 0.40,
+    "recognition_threshold": 0.45,
     "cooldown_seconds": 300,
     "attendance_start_hour": 9,
     "attendance_start_minute": 0,
